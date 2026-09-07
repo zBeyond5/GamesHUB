@@ -1,33 +1,33 @@
 // ==UserScript==
 // @name         Game Launcher (janela flutuante)
 // @namespace    devchris
-// @version      5.0
-// @description  Hub de jogos persistente com painel admin protegido por senha (Ctrl+Alt+A), janela flutuante arrastável/redimensionável (16:9); detecta bloqueio de embed e cai pra nova aba
+// @version      6.0
+// @description  Hub de jogos com lista puxada de um manifest no GitHub + jogos temporários locais, janela flutuante arrastável/redimensionável (16:9); detecta bloqueio de embed e cai pra nova aba
 // @match        *://*/*
 // @grant        GM_registerMenuCommand
 // @grant        GM_setValue
 // @grant        GM_getValue
 // @grant        GM.setValue
 // @grant        GM.getValue
+// @grant        GM_xmlhttpRequest
+// @connect      raw.githubusercontent.com
+// @connect      github.com
+// @connect      api.github.com
 // @noframes
 // ==/UserScript==
 (function () {
   'use strict';
 
+  // ======= CONFIGURAÇÃO =======
+  // Troque pela URL "raw" do seu manifest.json no GitHub.
+  // Ex.: https://raw.githubusercontent.com/usuario/repo/main/games.json
+  const MANIFEST_URL = 'https://raw.githubusercontent.com/SEU_USUARIO/SEU_REPO/main/games.json';
+
   const TIMEOUT_DETECCAO_MS = 4000;
+  const TIMEOUT_MANIFEST_MS = 8000;
   const LARGURA_MIN = 280;
   const ALTURA_MIN = 200;
   const RAZAO_16_9 = 16 / 9;
-
-  // Atalho pra abrir a área administrativa. Mude aqui se quiser outra combinação.
-  const ATALHO_ADMIN = { ctrl: true, alt: true, shift: false, tecla: 'a' };
-
-  let modoAdmin = false; // fica true só depois de login bem-sucedido nesta navegação
-
-  async function sha256Hex(texto) {
-    const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(texto));
-    return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, '0')).join('');
-  }
 
   const PREFIXO_LOG = '[Game Launcher]';
   const GM_SINCRONO = typeof GM_getValue === 'function' && typeof GM_setValue === 'function';
@@ -40,9 +40,7 @@
     );
   }
 
-  // Lê da API do gerenciador de userscripts (GM_* síncrona ou GM.* assíncrona);
-  // se não encontrar nada lá, tenta o backup redundante em localStorage antes
-  // de desistir e devolver o padrão.
+  // ---------- Storage (GM_* síncrona ou GM.* assíncrona, com backup em localStorage) ----------
   async function lerStorage(chave, padrao) {
     let bruto = null;
     try {
@@ -65,8 +63,6 @@
     }
   }
 
-  // Grava tanto na API do gerenciador quanto num backup redundante em
-  // localStorage, pra sobreviver mesmo se uma das duas falhar silenciosamente.
   async function salvarStorage(chave, valor) {
     const json = JSON.stringify(valor);
     let salvouGM = false;
@@ -97,148 +93,103 @@
     salvarStorage('launcher-layout', cfg);
   }
 
-  async function carregarJogos() {
-    const padrao = [
-      { id: 'knightfall', nome: 'Knightfall Arena', url: 'https://knightfallarena.io/', status: 'nao-testado', ultimoTeste: null },
-    ];
-    const salvo = await lerStorage('launcher-jogos', null);
-    return salvo && Array.isArray(salvo) && salvo.length ? salvo : padrao;
-  }
-  function salvarJogos(lista) {
-    salvarStorage('launcher-jogos', lista);
+  function gerarId(prefixo) {
+    return (prefixo || 'g') + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
   }
 
-  function gerarId() {
-    return 'g' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  // ---------- Manifest remoto (fonte principal da lista de jogos) ----------
+  function buscarTexto(url, timeoutMs) {
+    return new Promise((resolve, reject) => {
+      if (typeof GM_xmlhttpRequest === 'function') {
+        const timer = setTimeout(() => reject(new Error('timeout')), timeoutMs);
+        GM_xmlhttpRequest({
+          method: 'GET',
+          url,
+          timeout: timeoutMs,
+          onload: (res) => {
+            clearTimeout(timer);
+            if (res.status >= 200 && res.status < 300) resolve(res.responseText);
+            else reject(new Error('status ' + res.status));
+          },
+          onerror: () => { clearTimeout(timer); reject(new Error('erro de rede')); },
+          ontimeout: () => { clearTimeout(timer); reject(new Error('timeout')); },
+        });
+      } else {
+        const controlador = new AbortController();
+        const timer = setTimeout(() => controlador.abort(), timeoutMs);
+        fetch(url, { signal: controlador.signal, cache: 'no-store' })
+          .then((res) => {
+            clearTimeout(timer);
+            if (!res.ok) throw new Error('status ' + res.status);
+            return res.text();
+          })
+          .then(resolve)
+          .catch(reject);
+      }
+    });
   }
 
-  async function carregarCredenciais() {
-    return await lerStorage('launcher-admin', null); // null = ainda não configurado
+  // Normaliza um item cru do manifest pro formato interno de jogo.
+  function normalizarJogoManifest(item) {
+    if (!item || typeof item.nome !== 'string' || typeof item.url !== 'string') return null;
+    let url = item.url.trim();
+    if (!url) return null;
+    if (!/^https?:\/\//i.test(url)) url = 'https://' + url;
+    return {
+      id: typeof item.id === 'string' && item.id ? 'manifest-' + item.id : gerarId('manifest-'),
+      nome: item.nome.trim(),
+      url,
+      origem: 'manifest',
+      status: 'nao-testado',
+      ultimoTeste: null,
+    };
   }
-  function salvarCredenciais(usuario, hashSenha) {
-    salvarStorage('launcher-admin', { usuario, hashSenha });
+
+  // Busca o manifest no GitHub; em caso de falha usa o último cache salvo localmente.
+  async function carregarJogosManifest(forcarAtualizacao) {
+    const cache = await lerStorage('launcher-manifest-cache', { jogos: [], atualizadoEm: null, erro: null });
+    if (!forcarAtualizacao && cache.jogos.length) {
+      // ainda tenta atualizar em segundo plano, mas devolve o cache na hora
+      atualizarManifestEmSegundoPlano();
+      return cache;
+    }
+    try {
+      const texto = await buscarTexto(MANIFEST_URL, TIMEOUT_MANIFEST_MS);
+      const bruto = JSON.parse(texto);
+      const listaBruta = Array.isArray(bruto) ? bruto : Array.isArray(bruto.jogos) ? bruto.jogos : null;
+      if (!listaBruta) throw new Error('formato inválido: esperava um array ou { "jogos": [...] }');
+      const jogos = listaBruta.map(normalizarJogoManifest).filter(Boolean);
+      const novoCache = { jogos, atualizadoEm: new Date().toISOString(), erro: null };
+      salvarStorage('launcher-manifest-cache', novoCache);
+      return novoCache;
+    } catch (e) {
+      console.error(`${PREFIXO_LOG} falha ao buscar manifest:`, e);
+      const comErro = { ...cache, erro: String(e.message || e) };
+      salvarStorage('launcher-manifest-cache', comErro);
+      return comErro;
+    }
+  }
+
+  let atualizandoEmSegundoPlano = false;
+  function atualizarManifestEmSegundoPlano() {
+    if (atualizandoEmSegundoPlano) return;
+    atualizandoEmSegundoPlano = true;
+    carregarJogosManifest(true).finally(() => { atualizandoEmSegundoPlano = false; });
+  }
+
+  // ---------- Jogos temporários (adicionados localmente, não vêm do manifest) ----------
+  async function carregarJogosTemporarios() {
+    return await lerStorage('launcher-jogos-temporarios', []);
+  }
+  function salvarJogosTemporarios(lista) {
+    salvarStorage('launcher-jogos-temporarios', lista);
   }
 
   function estiloCampo() {
     return `
       background: #0d0d0d; color: #eee; border: 1px solid #333; border-radius: 4px;
-      padding: 7px 9px; font-size: 12px; font-family: Arial, sans-serif;
+      padding: 7px 9px; font-size: 12px; font-family: Arial, sans-serif; width: 100%; box-sizing: border-box;
     `;
-  }
-
-  // ---------- Modal de login / criação de credenciais admin ----------
-  async function abrirModalAdmin() {
-    if (document.getElementById('launcher-admin-modal')) return;
-    const credenciais = await carregarCredenciais();
-    const criandoConta = !credenciais;
-
-    const fundo = document.createElement('div');
-    fundo.id = 'launcher-admin-modal';
-    fundo.style.cssText = `
-      position: fixed; inset: 0; z-index: 2147483647;
-      background: rgba(0,0,0,0.55); display: flex; align-items: center; justify-content: center;
-    `;
-
-    const card = document.createElement('div');
-    card.style.cssText = `
-      width: 260px; background: #111; border: 1px solid #333; border-radius: 8px;
-      padding: 16px; font-family: Arial, sans-serif; color: #eee;
-      box-shadow: 0 8px 30px rgba(0,0,0,0.6);
-    `;
-
-    const titulo = document.createElement('div');
-    titulo.textContent = criandoConta ? '🔐 Criar acesso admin' : '🔐 Login admin';
-    titulo.style.cssText = 'font-size: 14px; font-weight: bold; margin-bottom: 10px;';
-
-    const inputUsuario = document.createElement('input');
-    inputUsuario.placeholder = 'Usuário';
-    inputUsuario.style.cssText = estiloCampo() + 'width: 100%; box-sizing: border-box; margin-bottom: 6px;';
-
-    const inputSenha = document.createElement('input');
-    inputSenha.type = 'password';
-    inputSenha.placeholder = 'Senha';
-    inputSenha.style.cssText = estiloCampo() + 'width: 100%; box-sizing: border-box; margin-bottom: 6px;';
-
-    const inputSenha2 = document.createElement('input');
-    inputSenha2.type = 'password';
-    inputSenha2.placeholder = 'Confirmar senha';
-    inputSenha2.style.cssText = estiloCampo() + 'width: 100%; box-sizing: border-box; margin-bottom: 6px;';
-
-    const erro = document.createElement('div');
-    erro.style.cssText = 'color: #f87171; font-size: 11px; min-height: 14px; margin-bottom: 6px;';
-
-    const linhaBotoes = document.createElement('div');
-    linhaBotoes.style.cssText = 'display: flex; gap: 6px;';
-
-    const confirmarBtn = document.createElement('button');
-    confirmarBtn.textContent = criandoConta ? 'Criar' : 'Entrar';
-    confirmarBtn.style.cssText = `
-      flex: 1; background: #2563eb; color: #fff; border: none; border-radius: 4px;
-      padding: 8px; cursor: pointer; font-size: 12px; font-weight: bold;
-    `;
-    const cancelarBtn = document.createElement('button');
-    cancelarBtn.textContent = 'Cancelar';
-    cancelarBtn.style.cssText = `
-      flex: 1; background: #374151; color: #fff; border: none; border-radius: 4px;
-      padding: 8px; cursor: pointer; font-size: 12px;
-    `;
-
-    card.appendChild(titulo);
-    card.appendChild(inputUsuario);
-    card.appendChild(inputSenha);
-    if (criandoConta) card.appendChild(inputSenha2);
-    card.appendChild(erro);
-    linhaBotoes.appendChild(confirmarBtn);
-    linhaBotoes.appendChild(cancelarBtn);
-    card.appendChild(linhaBotoes);
-    fundo.appendChild(card);
-    document.body.appendChild(fundo);
-    inputUsuario.focus();
-
-    function fechar() {
-      fundo.remove();
-      document.removeEventListener('keydown', aoTeclarEscModal);
-    }
-    function aoTeclarEscModal(e) {
-      if (e.key === 'Escape') fechar();
-      if (e.key === 'Enter') confirmarBtn.click();
-    }
-    document.addEventListener('keydown', aoTeclarEscModal);
-    cancelarBtn.addEventListener('click', fechar);
-
-    confirmarBtn.addEventListener('click', async () => {
-      const usuario = inputUsuario.value.trim();
-      const senha = inputSenha.value;
-      if (!usuario || !senha) {
-        erro.textContent = 'Preencha usuário e senha.';
-        return;
-      }
-      if (criandoConta) {
-        if (senha.length < 4) {
-          erro.textContent = 'Senha muito curta (mín. 4 caracteres).';
-          return;
-        }
-        if (senha !== inputSenha2.value) {
-          erro.textContent = 'As senhas não coincidem.';
-          return;
-        }
-        const hash = await sha256Hex(senha);
-        salvarCredenciais(usuario, hash);
-        modoAdmin = true;
-        fechar();
-        abrirPainelJogos();
-      } else {
-        const hash = await sha256Hex(senha);
-        if (usuario === credenciais.usuario && hash === credenciais.hashSenha) {
-          modoAdmin = true;
-          fechar();
-          abrirPainelJogos();
-        } else {
-          erro.textContent = 'Usuário ou senha incorretos.';
-          inputSenha.value = '';
-        }
-      }
-    });
   }
 
   function statusIcone(status) {
@@ -252,10 +203,105 @@
     return 'Não testado';
   }
 
+  // ---------- Modal simples pra adicionar um jogo temporário ----------
+  function abrirModalJogoTemporario(aoConfirmar) {
+    if (document.getElementById('launcher-temp-modal')) return;
+
+    const fundo = document.createElement('div');
+    fundo.id = 'launcher-temp-modal';
+    fundo.style.cssText = `
+      position: fixed; inset: 0; z-index: 2147483647;
+      background: rgba(0,0,0,0.55); display: flex; align-items: center; justify-content: center;
+    `;
+
+    const card = document.createElement('div');
+    card.style.cssText = `
+      width: 260px; background: #111; border: 1px solid #333; border-radius: 8px;
+      padding: 16px; font-family: Arial, sans-serif; color: #eee;
+      box-shadow: 0 8px 30px rgba(0,0,0,0.6);
+    `;
+
+    const titulo = document.createElement('div');
+    titulo.textContent = '＋ Jogo temporário';
+    titulo.style.cssText = 'font-size: 14px; font-weight: bold; margin-bottom: 4px;';
+
+    const legenda = document.createElement('div');
+    legenda.textContent = 'Fica salvo só neste dispositivo, separado da lista do manifest.';
+    legenda.style.cssText = 'font-size: 11px; color: #888; margin-bottom: 10px;';
+
+    const inputNome = document.createElement('input');
+    inputNome.placeholder = 'Nome do jogo';
+    inputNome.style.cssText = estiloCampo() + 'margin-bottom: 6px;';
+
+    const inputUrl = document.createElement('input');
+    inputUrl.placeholder = 'https://...';
+    inputUrl.style.cssText = estiloCampo() + 'margin-bottom: 6px;';
+
+    const erro = document.createElement('div');
+    erro.style.cssText = 'color: #f87171; font-size: 11px; min-height: 14px; margin-bottom: 6px;';
+
+    const linhaBotoes = document.createElement('div');
+    linhaBotoes.style.cssText = 'display: flex; gap: 6px;';
+
+    const confirmarBtn = document.createElement('button');
+    confirmarBtn.textContent = 'Adicionar';
+    confirmarBtn.style.cssText = `
+      flex: 1; background: #2563eb; color: #fff; border: none; border-radius: 4px;
+      padding: 8px; cursor: pointer; font-size: 12px; font-weight: bold;
+    `;
+    const cancelarBtn = document.createElement('button');
+    cancelarBtn.textContent = 'Cancelar';
+    cancelarBtn.style.cssText = `
+      flex: 1; background: #374151; color: #fff; border: none; border-radius: 4px;
+      padding: 8px; cursor: pointer; font-size: 12px;
+    `;
+
+    card.appendChild(titulo);
+    card.appendChild(legenda);
+    card.appendChild(inputNome);
+    card.appendChild(inputUrl);
+    card.appendChild(erro);
+    linhaBotoes.appendChild(confirmarBtn);
+    linhaBotoes.appendChild(cancelarBtn);
+    card.appendChild(linhaBotoes);
+    fundo.appendChild(card);
+    document.body.appendChild(fundo);
+    inputNome.focus();
+
+    function fechar() {
+      fundo.remove();
+      document.removeEventListener('keydown', aoTeclar);
+    }
+    function aoTeclar(e) {
+      if (e.key === 'Escape') fechar();
+      if (e.key === 'Enter') confirmarBtn.click();
+    }
+    document.addEventListener('keydown', aoTeclar);
+    cancelarBtn.addEventListener('click', fechar);
+
+    confirmarBtn.addEventListener('click', () => {
+      const nome = inputNome.value.trim();
+      let url = inputUrl.value.trim();
+      if (!nome || !url) {
+        erro.textContent = 'Preencha nome e URL.';
+        return;
+      }
+      if (!/^https?:\/\//i.test(url)) url = 'https://' + url;
+      fechar();
+      aoConfirmar({
+        id: gerarId('temp-'),
+        nome,
+        url,
+        origem: 'temporario',
+        status: 'nao-testado',
+        ultimoTeste: null,
+      });
+    });
+  }
+
   // ---------- Painel de lista de jogos ----------
   async function abrirPainelJogos() {
     if (document.getElementById('launcher-painel')) return;
-    let jogos = await carregarJogos();
 
     const painel = document.createElement('div');
     painel.id = 'launcher-painel';
@@ -275,25 +321,28 @@
       flex-shrink: 0;
     `;
     const titulo = document.createElement('span');
-    titulo.textContent = modoAdmin ? '🎮 Jogos salvos — 🔓 Admin' : '🎮 Jogos salvos';
+    titulo.textContent = '🎮 Jogos';
     titulo.style.cssText = 'font-size: 13px; font-weight: bold;';
 
     const botoesCabecalho = document.createElement('div');
     botoesCabecalho.style.cssText = 'display: flex; gap: 6px;';
-    if (modoAdmin) {
-      const sairBtn = document.createElement('button');
-      sairBtn.textContent = 'Sair do admin';
-      sairBtn.style.cssText = `
-        background: #374151; color: #fff; border: none; border-radius: 4px;
-        padding: 4px 8px; cursor: pointer; font-size: 11px;
-      `;
-      sairBtn.addEventListener('click', () => {
-        modoAdmin = false;
-        fecharPainel();
-        abrirPainelJogos();
-      });
-      botoesCabecalho.appendChild(sairBtn);
-    }
+
+    const atualizarBtn = document.createElement('button');
+    atualizarBtn.textContent = '🔄';
+    atualizarBtn.title = 'Atualizar lista do manifest';
+    atualizarBtn.style.cssText = `
+      background: #374151; color: #fff; border: none; border-radius: 4px;
+      padding: 4px 8px; cursor: pointer; font-size: 12px;
+    `;
+    atualizarBtn.addEventListener('click', async () => {
+      atualizarBtn.disabled = true;
+      atualizarBtn.textContent = '⏳';
+      await carregarJogosManifest(true);
+      atualizarBtn.disabled = false;
+      atualizarBtn.textContent = '🔄';
+      renderizarLista();
+    });
+
     const fecharBtn = document.createElement('button');
     fecharBtn.textContent = '✕';
     fecharBtn.style.cssText = `
@@ -301,9 +350,14 @@
       padding: 4px 9px; cursor: pointer; font-size: 12px;
     `;
     fecharBtn.addEventListener('click', fecharPainel);
+
+    botoesCabecalho.appendChild(atualizarBtn);
     botoesCabecalho.appendChild(fecharBtn);
     cabecalho.appendChild(titulo);
     cabecalho.appendChild(botoesCabecalho);
+
+    const avisoManifest = document.createElement('div');
+    avisoManifest.style.cssText = 'padding: 6px 12px; font-size: 10px; color: #f87171; display: none; border-bottom: 1px solid #333;';
 
     const lista = document.createElement('div');
     lista.style.cssText = 'overflow-y: auto; flex: 1; padding: 6px;';
@@ -313,48 +367,24 @@
       border-top: 1px solid #333; padding: 10px 12px; background: #1a1a1a;
       flex-shrink: 0;
     `;
-    const rodapeConteudo = document.createElement('div');
-    if (modoAdmin) {
-      rodapeConteudo.style.cssText = 'display: flex; flex-direction: column; gap: 6px;';
-    } else {
-      rodapeConteudo.style.cssText = 'text-align: center; font-size: 11px; color: #666;';
-      rodapeConteudo.textContent = 'Ctrl+Alt+A pra entrar no modo admin e adicionar jogos.';
-    }
-    rodape.appendChild(rodapeConteudo);
-    const inputNome = document.createElement('input');
-    inputNome.placeholder = 'Nome do jogo';
-    inputNome.style.cssText = campoEstilo();
-    const inputUrl = document.createElement('input');
-    inputUrl.placeholder = 'https://...';
-    inputUrl.style.cssText = campoEstilo();
-    const addBtn = document.createElement('button');
-    addBtn.textContent = '＋ Adicionar jogo';
-    addBtn.style.cssText = `
-      background: #2563eb; color: #fff; border: none; border-radius: 4px;
-      padding: 7px; cursor: pointer; font-size: 12px; font-weight: bold;
+    const addTempBtn = document.createElement('button');
+    addTempBtn.textContent = '＋ Adicionar jogo temporário';
+    addTempBtn.style.cssText = `
+      width: 100%; background: #2563eb; color: #fff; border: none; border-radius: 4px;
+      padding: 8px; cursor: pointer; font-size: 12px; font-weight: bold;
     `;
-    function campoEstilo() {
-      return `
-        background: #0d0d0d; color: #eee; border: 1px solid #333; border-radius: 4px;
-        padding: 6px 8px; font-size: 12px; font-family: Arial, sans-serif;
-      `;
-    }
-    addBtn.addEventListener('click', () => {
-      const nome = inputNome.value.trim();
-      let url = inputUrl.value.trim();
-      if (!nome || !url) return;
-      if (!/^https?:\/\//i.test(url)) url = 'https://' + url;
-      jogos.push({ id: gerarId(), nome, url, status: 'nao-testado', ultimoTeste: null });
-      salvarJogos(jogos);
-      inputNome.value = '';
-      inputUrl.value = '';
-      renderizarLista();
+    addTempBtn.addEventListener('click', () => {
+      abrirModalJogoTemporario(async (novoJogo) => {
+        const temporarios = await carregarJogosTemporarios();
+        temporarios.push(novoJogo);
+        salvarJogosTemporarios(temporarios);
+        renderizarLista();
+      });
     });
-    rodapeConteudo.appendChild(inputNome);
-    rodapeConteudo.appendChild(inputUrl);
-    rodapeConteudo.appendChild(addBtn);
+    rodape.appendChild(addTempBtn);
 
     painel.appendChild(cabecalho);
+    painel.appendChild(avisoManifest);
     painel.appendChild(lista);
     painel.appendChild(rodape);
     document.body.appendChild(painel);
@@ -368,49 +398,54 @@
       document.removeEventListener('keydown', aoTeclarEscPainel);
     }
 
-    function renderizarLista() {
-      lista.innerHTML = '';
-      if (!jogos.length) {
-        const vazio = document.createElement('div');
-        vazio.textContent = 'Nenhum jogo salvo ainda. Adicione um abaixo.';
-        vazio.style.cssText = 'color: #888; font-size: 12px; padding: 10px; text-align: center;';
-        lista.appendChild(vazio);
-        return;
-      }
-      jogos.forEach((jogo) => {
-        const linha = document.createElement('div');
-        linha.style.cssText = `
-          display: flex; align-items: center; gap: 8px;
-          padding: 8px; border-radius: 6px; margin-bottom: 4px;
-          background: #1a1a1a;
-        `;
-        const info = document.createElement('div');
-        info.style.cssText = 'flex: 1; min-width: 0;';
-        const linhaNome = document.createElement('div');
-        linhaNome.textContent = jogo.nome;
-        linhaNome.style.cssText = 'font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;';
-        const linhaStatus = document.createElement('div');
-        linhaStatus.textContent = `${statusIcone(jogo.status)} ${statusTexto(jogo.status)}`;
-        linhaStatus.style.cssText = 'font-size: 11px; color: #999;';
-        info.appendChild(linhaNome);
-        info.appendChild(linhaStatus);
+    function linhaJogo(jogo, permiteRemover) {
+      const linha = document.createElement('div');
+      linha.style.cssText = `
+        display: flex; align-items: center; gap: 8px;
+        padding: 8px; border-radius: 6px; margin-bottom: 4px;
+        background: #1a1a1a;
+      `;
+      const info = document.createElement('div');
+      info.style.cssText = 'flex: 1; min-width: 0;';
+      const linhaNome = document.createElement('div');
+      linhaNome.textContent = jogo.nome;
+      linhaNome.style.cssText = 'font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;';
+      const linhaStatus = document.createElement('div');
+      const origemTag = jogo.origem === 'temporario' ? ' · temporário' : '';
+      linhaStatus.textContent = `${statusIcone(jogo.status)} ${statusTexto(jogo.status)}${origemTag}`;
+      linhaStatus.style.cssText = 'font-size: 11px; color: #999;';
+      info.appendChild(linhaNome);
+      info.appendChild(linhaStatus);
 
-        const jogarBtn = document.createElement('button');
-        jogarBtn.textContent = '▶';
-        jogarBtn.title = 'Jogar';
-        jogarBtn.style.cssText = `
-          background: #16a34a; color: #fff; border: none; border-radius: 4px;
-          padding: 6px 10px; cursor: pointer; font-size: 12px; flex-shrink: 0;
-        `;
-        jogarBtn.addEventListener('click', () => {
-          fecharPainel();
-          abrirJogo(jogo, (novoStatus) => {
-            jogo.status = novoStatus;
-            jogo.ultimoTeste = new Date().toISOString();
-            salvarJogos(jogos);
-          });
+      const jogarBtn = document.createElement('button');
+      jogarBtn.textContent = '▶';
+      jogarBtn.title = 'Jogar';
+      jogarBtn.style.cssText = `
+        background: #16a34a; color: #fff; border: none; border-radius: 4px;
+        padding: 6px 10px; cursor: pointer; font-size: 12px; flex-shrink: 0;
+      `;
+      jogarBtn.addEventListener('click', () => {
+        fecharPainel();
+        abrirJogo(jogo, async (novoStatus) => {
+          jogo.status = novoStatus;
+          jogo.ultimoTeste = new Date().toISOString();
+          if (jogo.origem === 'temporario') {
+            const temporarios = await carregarJogosTemporarios();
+            const idx = temporarios.findIndex((j) => j.id === jogo.id);
+            if (idx !== -1) {
+              temporarios[idx] = jogo;
+              salvarJogosTemporarios(temporarios);
+            }
+          }
+          // status de jogos do manifest não é persistido de volta no manifest remoto,
+          // só reflete na sessão atual.
         });
+      });
 
+      linha.appendChild(info);
+      linha.appendChild(jogarBtn);
+
+      if (permiteRemover) {
         const removerBtn = document.createElement('button');
         removerBtn.textContent = '✕';
         removerBtn.title = 'Remover';
@@ -418,18 +453,50 @@
           background: #374151; color: #fff; border: none; border-radius: 4px;
           padding: 6px 9px; cursor: pointer; font-size: 12px; flex-shrink: 0;
         `;
-        removerBtn.addEventListener('click', () => {
-          jogos = jogos.filter((j) => j.id !== jogo.id);
-          salvarJogos(jogos);
+        removerBtn.addEventListener('click', async () => {
+          const temporarios = (await carregarJogosTemporarios()).filter((j) => j.id !== jogo.id);
+          salvarJogosTemporarios(temporarios);
           renderizarLista();
         });
+        linha.appendChild(removerBtn);
+      }
 
-        linha.appendChild(info);
-        linha.appendChild(jogarBtn);
-        if (modoAdmin) linha.appendChild(removerBtn);
-        lista.appendChild(linha);
-      });
+      return linha;
     }
+
+    async function renderizarLista() {
+      lista.innerHTML = '<div style="color:#888;font-size:12px;padding:10px;text-align:center;">Carregando...</div>';
+
+      const [manifest, temporarios] = await Promise.all([
+        carregarJogosManifest(false),
+        carregarJogosTemporarios(),
+      ]);
+
+      lista.innerHTML = '';
+
+      if (manifest.erro) {
+        avisoManifest.style.display = 'block';
+        avisoManifest.textContent = manifest.atualizadoEm
+          ? `⚠ Não deu pra atualizar o manifest agora (usando cache de ${new Date(manifest.atualizadoEm).toLocaleString()}).`
+          : `⚠ Não deu pra carregar o manifest: ${manifest.erro}`;
+      } else {
+        avisoManifest.style.display = 'none';
+      }
+
+      const todosOsJogos = [...manifest.jogos, ...temporarios];
+
+      if (!todosOsJogos.length) {
+        const vazio = document.createElement('div');
+        vazio.textContent = 'Nenhum jogo disponível. Configure o manifest ou adicione um jogo temporário.';
+        vazio.style.cssText = 'color: #888; font-size: 12px; padding: 10px; text-align: center;';
+        lista.appendChild(vazio);
+        return;
+      }
+
+      manifest.jogos.forEach((jogo) => lista.appendChild(linhaJogo(jogo, false)));
+      temporarios.forEach((jogo) => lista.appendChild(linhaJogo(jogo, true)));
+    }
+
     renderizarLista();
   }
 
@@ -743,31 +810,12 @@
     document.body.appendChild(btn);
   }
 
-  document.addEventListener('keydown', (e) => {
-    const bateu =
-      e.ctrlKey === ATALHO_ADMIN.ctrl &&
-      e.altKey === ATALHO_ADMIN.alt &&
-      e.shiftKey === ATALHO_ADMIN.shift &&
-      e.key.toLowerCase() === ATALHO_ADMIN.tecla;
-    if (bateu) {
-      e.preventDefault();
-      if (modoAdmin) {
-        // já logado nesta navegação: só abre/reabre o painel em modo admin
-        const painelAberto = document.getElementById('launcher-painel');
-        if (painelAberto) painelAberto.remove();
-        abrirPainelJogos();
-      } else {
-        abrirModalAdmin();
-      }
-    }
-  });
-
   if (typeof GM_registerMenuCommand === 'function') {
     GM_registerMenuCommand('Abrir lista de jogos', abrirPainelJogos);
-    GM_registerMenuCommand('Área administrativa (Ctrl+Alt+A)', () => {
-      if (modoAdmin) abrirPainelJogos();
-      else abrirModalAdmin();
-    });
+    GM_registerMenuCommand('Atualizar manifest agora', () => carregarJogosManifest(true));
   }
+
   criarBotaoFlutuante();
+  // Busca o manifest assim que a página carrega, pra já ter cache pronto quando o painel abrir.
+  carregarJogosManifest(false);
 })();
