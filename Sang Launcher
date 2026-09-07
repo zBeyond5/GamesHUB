@@ -18,10 +18,7 @@
 (function () {
   'use strict';
 
-  // ======= CONFIGURAÇÃO =======
-  // Troque pela URL "raw" do seu manifest.json no GitHub.
-  // Ex.: https://raw.githubusercontent.com/usuario/repo/main/games.json
-  const MANIFEST_URL = 'https://raw.githubusercontent.com/SEU_USUARIO/SEU_REPO/main/games.json';
+  const MANIFEST_URL = 'https://github.com/zBeyond5/GamesHUB/blob/main/TMGames/manifest.json';
 
   const TIMEOUT_DETECCAO_MS = 4000;
   const TIMEOUT_MANIFEST_MS = 8000;
