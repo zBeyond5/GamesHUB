@@ -1,0 +1,333 @@
+// ==UserScript==
+// @name         Knightfall Arena Launcher
+// @namespace    devchris
+// @version      3.0
+// @description  Abre o Knightfall Arena numa janela flutuante arrastável, redimensionável (16:9) e com atalho pra mutar; se o site bloquear embed, abre em nova aba
+// @match        *://*/*
+// @grant        GM_registerMenuCommand
+// @grant        GM_setValue
+// @grant        GM_getValue
+// @noframes
+// ==/UserScript==
+(function () {
+  'use strict';
+  const JOGO_URL = 'https://knightfallarena.io/';
+  const TIMEOUT_DETECCAO_MS = 4000;
+
+  const TEM_GM_STORAGE = typeof GM_getValue === 'function' && typeof GM_setValue === 'function';
+  function carregarConfig() {
+    const padrao = { x: null, y: null, w: 480, h: 360, maximizado: false };
+    try {
+      if (TEM_GM_STORAGE) {
+        const salvo = GM_getValue('knightfall-layout', null);
+        return salvo ? { ...padrao, ...JSON.parse(salvo) } : padrao;
+      }
+      const salvo = localStorage.getItem('knightfall-layout');
+      return salvo ? { ...padrao, ...JSON.parse(salvo) } : padrao;
+    } catch (e) {
+      return padrao;
+    }
+  }
+  function salvarConfig(cfg) {
+    try {
+      const json = JSON.stringify(cfg);
+      if (TEM_GM_STORAGE) GM_setValue('knightfall-layout', json);
+      else localStorage.setItem('knightfall-layout', json);
+    } catch (e) { /* ignora falha de storage */ }
+  }
+
+  const LARGURA_MIN = 280;
+  const ALTURA_MIN = 200;
+  const RAZAO_16_9 = 16 / 9;
+
+  function abrirJogo() {
+    if (document.getElementById('knightfall-overlay')) return;
+
+    const cfg = carregarConfig();
+    const larguraInicial = Math.min(Math.max(cfg.w, LARGURA_MIN), window.innerWidth - 20);
+    const alturaInicial = Math.min(Math.max(cfg.h, ALTURA_MIN), window.innerHeight - 20);
+    const xInicial = cfg.x !== null ? Math.min(cfg.x, window.innerWidth - larguraInicial) : (window.innerWidth - larguraInicial) / 2;
+    const yInicial = cfg.y !== null ? Math.min(cfg.y, window.innerHeight - alturaInicial) : (window.innerHeight - alturaInicial) / 2;
+
+    const overlay = document.createElement('div');
+    overlay.id = 'knightfall-overlay';
+    overlay.style.cssText = `
+      position: fixed; z-index: 2147483647;
+      background: #000; display: flex; flex-direction: column;
+      border: 1px solid #333; border-radius: 8px; overflow: hidden;
+      box-shadow: 0 8px 30px rgba(0,0,0,0.6);
+      left: ${xInicial}px; top: ${yInicial}px;
+      width: ${larguraInicial}px; height: ${alturaInicial}px;
+      min-width: ${LARGURA_MIN}px; min-height: ${ALTURA_MIN}px;
+      resize: none;
+    `;
+
+    let maximizado = !!cfg.maximizado;
+    let estadoAntesMaximizar = null;
+
+    const barra = document.createElement('div');
+    barra.style.cssText = `
+      display: flex; justify-content: space-between; align-items: center;
+      background: #111; padding: 6px 10px; font-family: Arial, sans-serif;
+      cursor: move; user-select: none; flex-shrink: 0;
+    `;
+
+    const status = document.createElement('span');
+    status.textContent = '⚔ Knightfall Arena — Carregando...';
+    status.style.cssText = 'color: #aaa; font-size: 12px; pointer-events: none;';
+
+    const controles = document.createElement('div');
+    controles.style.cssText = 'display: flex; gap: 6px;';
+
+    function botao(texto, bg) {
+      const b = document.createElement('button');
+      b.textContent = texto;
+      b.style.cssText = `
+        background: ${bg}; color: #fff; border: none; border-radius: 4px;
+        padding: 6px 10px; cursor: pointer; font-family: Arial, sans-serif; font-size: 13px;
+        line-height: 1;
+      `;
+      return b;
+    }
+
+    const mutarBtn = botao('🔊', '#374151');
+    mutarBtn.title = 'Mutar (script não alcança áudio de outra origem — clique pra ver como mutar pelo navegador)';
+    const minimizarBtn = botao('—', '#374151');
+    const maximizarBtn = botao('▢', '#374151');
+    const fecharBtn = botao('✕', '#c0392b');
+
+    controles.appendChild(mutarBtn);
+    controles.appendChild(minimizarBtn);
+    controles.appendChild(maximizarBtn);
+    controles.appendChild(fecharBtn);
+    barra.appendChild(status);
+    barra.appendChild(controles);
+
+    const corpo = document.createElement('div');
+    corpo.style.cssText = 'flex: 1; position: relative; min-height: 0;';
+
+    const iframe = document.createElement('iframe');
+    iframe.style.cssText = 'width: 100%; height: 100%; border: none; display: block;';
+    iframe.setAttribute('allow', 'autoplay; fullscreen');
+
+    corpo.appendChild(iframe);
+
+    // Alça de redimensionamento (canto inferior direito)
+    const alca = document.createElement('div');
+    alca.style.cssText = `
+      position: absolute; right: 0; bottom: 0; width: 16px; height: 16px;
+      cursor: nwse-resize; z-index: 10;
+      background: linear-gradient(135deg, transparent 50%, #555 50%);
+    `;
+    corpo.appendChild(alca);
+
+    overlay.appendChild(barra);
+    overlay.appendChild(corpo);
+    document.body.appendChild(overlay);
+
+    // Um "capa de vidro" transparente sobre o iframe durante o arrasto/resize,
+    // pra o mouse não ser "roubado" pelo conteúdo do iframe.
+    const capa = document.createElement('div');
+    capa.style.cssText = 'position: absolute; inset: 0; z-index: 5; display: none;';
+    corpo.appendChild(capa);
+
+    let carregou = false;
+    iframe.addEventListener('load', () => {
+      carregou = true;
+      status.textContent = '⚔ Knightfall Arena';
+    });
+
+    iframe.src = JOGO_URL;
+    // Muitos sites setam X-Frame-Options/CSP e o iframe falha silenciosamente
+    // (sem disparar 'error'). Se não carregar em N segundos, assume bloqueio
+    // e cai para nova aba.
+    setTimeout(() => {
+      if (!carregou) {
+        fecharJogo();
+        window.open(JOGO_URL, '_blank');
+      }
+    }, TIMEOUT_DETECCAO_MS);
+
+    function estadoAtual() {
+      return {
+        x: parseInt(overlay.style.left, 10),
+        y: parseInt(overlay.style.top, 10),
+        w: parseInt(overlay.style.width, 10),
+        h: parseInt(overlay.style.height, 10),
+        maximizado,
+      };
+    }
+
+    function fecharJogo() {
+      salvarConfig(estadoAtual());
+      overlay.remove();
+      document.removeEventListener('keydown', aoTeclarEsc);
+    }
+
+    function aoTeclarEsc(e) {
+      if (e.key === 'Escape') fecharJogo();
+    }
+    document.addEventListener('keydown', aoTeclarEsc);
+
+    fecharBtn.addEventListener('click', fecharJogo);
+
+    // Tenta mutar mídias dentro do iframe (só funciona se, no futuro, o jogo
+    // for same-origin; para o Knightfall Arena atual, cross-origin bloqueia
+    // isso por segurança do navegador — nesse caso mostramos uma dica).
+    let mutado = false;
+    let dicaTimeout = null;
+    function mostrarDica(texto) {
+      let dica = overlay.querySelector('#knightfall-dica');
+      if (!dica) {
+        dica = document.createElement('div');
+        dica.id = 'knightfall-dica';
+        dica.style.cssText = `
+          position: absolute; top: 40px; right: 8px; z-index: 20;
+          background: #1f2937; color: #eee; font-family: Arial, sans-serif;
+          font-size: 12px; padding: 8px 10px; border-radius: 6px; max-width: 220px;
+          box-shadow: 0 4px 12px rgba(0,0,0,0.5); line-height: 1.4;
+        `;
+        corpo.appendChild(dica);
+      }
+      dica.textContent = texto;
+      dica.style.display = 'block';
+      clearTimeout(dicaTimeout);
+      dicaTimeout = setTimeout(() => { dica.style.display = 'none'; }, 6000);
+    }
+    mutarBtn.addEventListener('click', () => {
+      mutado = !mutado;
+      let conseguiuMutarDireto = false;
+      try {
+        const doc = iframe.contentDocument; // lança erro se for cross-origin
+        doc.querySelectorAll('audio, video').forEach((m) => { m.muted = mutado; });
+        conseguiuMutarDireto = true;
+      } catch (e) {
+        conseguiuMutarDireto = false;
+      }
+      mutarBtn.textContent = mutado ? '🔇' : '🔊';
+      if (!conseguiuMutarDireto) {
+        mostrarDica(
+          mutado
+            ? 'O navegador bloqueia mutar áudio de sites de outra origem por script. Clique com o botão direito na aba do navegador → "Silenciar site" (ou clique no ícone de alto-falante na própria aba).'
+            : 'Pra reativar o som, use a mesma opção na aba do navegador ("Silenciar site" de novo).'
+        );
+      }
+    });
+
+    let minimizado = false;
+    let alturaAntesMinimizar = alturaInicial;
+    minimizarBtn.addEventListener('click', () => {
+      minimizado = !minimizado;
+      if (minimizado) {
+        alturaAntesMinimizar = parseInt(overlay.style.height, 10);
+        overlay.style.height = '36px';
+        corpo.style.display = 'none';
+        minimizarBtn.textContent = '▢';
+      } else {
+        overlay.style.height = alturaAntesMinimizar + 'px';
+        corpo.style.display = 'block';
+        minimizarBtn.textContent = '—';
+      }
+    });
+
+    function aplicarMaximizado() {
+      if (maximizado) {
+        estadoAntesMaximizar = {
+          x: overlay.style.left, y: overlay.style.top,
+          w: overlay.style.width, h: overlay.style.height,
+        };
+        overlay.style.left = '0px';
+        overlay.style.top = '0px';
+        overlay.style.width = '100vw';
+        overlay.style.height = '100vh';
+        overlay.style.borderRadius = '0';
+        maximizarBtn.textContent = '❐';
+      } else if (estadoAntesMaximizar) {
+        overlay.style.left = estadoAntesMaximizar.x;
+        overlay.style.top = estadoAntesMaximizar.y;
+        overlay.style.width = estadoAntesMaximizar.w;
+        overlay.style.height = estadoAntesMaximizar.h;
+        overlay.style.borderRadius = '8px';
+        maximizarBtn.textContent = '▢';
+      }
+    }
+    maximizarBtn.addEventListener('click', () => {
+      maximizado = !maximizado;
+      aplicarMaximizado();
+    });
+    if (maximizado) aplicarMaximizado();
+
+    // Arrastar pela barra
+    let arrastando = false, offX = 0, offY = 0;
+    barra.addEventListener('mousedown', (e) => {
+      if (maximizado || e.target !== barra && e.target !== status) return;
+      arrastando = true;
+      capa.style.display = 'block';
+      offX = e.clientX - overlay.offsetLeft;
+      offY = e.clientY - overlay.offsetTop;
+      e.preventDefault();
+    });
+
+    // Redimensionar pela alça
+    let redimensionando = false, startX = 0, startY = 0, startW = 0, startH = 0;
+    alca.addEventListener('mousedown', (e) => {
+      if (maximizado) return;
+      redimensionando = true;
+      capa.style.display = 'block';
+      startX = e.clientX;
+      startY = e.clientY;
+      startW = overlay.offsetWidth;
+      startH = overlay.offsetHeight;
+      e.preventDefault();
+      e.stopPropagation();
+    });
+
+    window.addEventListener('mousemove', (e) => {
+      if (arrastando) {
+        let novoX = e.clientX - offX;
+        let novoY = e.clientY - offY;
+        novoX = Math.max(0, Math.min(novoX, window.innerWidth - overlay.offsetWidth));
+        novoY = Math.max(0, Math.min(novoY, window.innerHeight - overlay.offsetHeight));
+        overlay.style.left = novoX + 'px';
+        overlay.style.top = novoY + 'px';
+      } else if (redimensionando) {
+        let novaW = startW + (e.clientX - startX);
+        let novaH = startH + (e.clientY - startY);
+        novaW = Math.max(LARGURA_MIN, Math.min(novaW, window.innerWidth - overlay.offsetLeft));
+        novaH = Math.max(ALTURA_MIN, Math.min(novaH, window.innerHeight - overlay.offsetTop));
+        overlay.style.width = novaW + 'px';
+        overlay.style.height = novaH + 'px';
+        if (!minimizado) alturaAntesMinimizar = novaH;
+      }
+    });
+
+    window.addEventListener('mouseup', () => {
+      if (arrastando || redimensionando) {
+        salvarConfig(estadoAtual());
+      }
+      arrastando = false;
+      redimensionando = false;
+      capa.style.display = 'none';
+    });
+  }
+
+  function criarBotaoFlutuante() {
+    if (document.getElementById('knightfall-launcher-btn')) return;
+    const btn = document.createElement('button');
+    btn.id = 'knightfall-launcher-btn';
+    btn.textContent = '⚔ Knightfall';
+    btn.style.cssText = `
+      position: fixed; bottom: 16px; right: 100px; z-index: 999999;
+      background: #7f1d1d; color: #fff; border: none; border-radius: 6px;
+      padding: 8px 14px; cursor: pointer; font-family: Arial, sans-serif;
+      font-size: 13px; box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+    `;
+    btn.addEventListener('click', abrirJogo);
+    document.body.appendChild(btn);
+  }
+
+  if (typeof GM_registerMenuCommand === 'function') {
+    GM_registerMenuCommand('Abrir Knightfall Arena', abrirJogo);
+  }
+  criarBotaoFlutuante();
+})();
