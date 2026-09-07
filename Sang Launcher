@@ -1,9 +1,8 @@
 // ==UserScript==
-// @name         Game Launcher (janela flutuante)
+// @name         SangLauncher
 // @namespace    devchris
 // @version      7.0
-// @description  Hub de jogos com lista puxada de um manifest no GitHub + jogos temporários locais; UI própria (tema azul, ícones SVG, FAB arrastável), janela flutuante arrastável/redimensionável (16:9); detecta bloqueio de embed e cai pra nova aba
-// @match        *://*/*
+// @description  Hub de jogos 
 // @grant        GM_registerMenuCommand
 // @grant        GM_setValue
 // @grant        GM_getValue
@@ -18,10 +17,7 @@
 (function () {
   'use strict';
 
-  // ======= CONFIGURAÇÃO =======
-  // Troque pela URL "raw" do seu manifest.json no GitHub.
-  // Ex.: https://raw.githubusercontent.com/usuario/repo/main/games.json
-  const MANIFEST_URL = 'https://raw.githubusercontent.com/SEU_USUARIO/SEU_REPO/main/games.json';
+  const MANIFEST_URL = 'https://raw.githubusercontent.com/zBeyond5/GamesHUB/refs/heads/main/TMGames/manifest.json';
 
   const TIMEOUT_DETECCAO_MS = 4000;
   const TIMEOUT_MANIFEST_MS = 8000;
