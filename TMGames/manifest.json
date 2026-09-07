@@ -1,0 +1,16 @@
+{
+  "jogos": [
+    {
+      "id": "knightfall",
+      "nome": "Knightfall Arena",
+      "url": "https://knightfallarena.io/",
+      "imagem": "https://cdn.phaser.io/news/2026/08/knightfall-arena-header.png"
+    },
+    {
+      "id": "geometrydash",
+      "nome": "Geometry Dash",
+      "url": "https://www.geometrydash.com/",
+      "imagem": "https://cdn.phaser.io/news/2026/06/geometry-dash-header.png"
+    }
+  ]
+}
