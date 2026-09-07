@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Game Launcher (janela flutuante)
 // @namespace    devchris
-// @version      6.0
-// @description  Hub de jogos com lista puxada de um manifest no GitHub + jogos temporários locais, janela flutuante arrastável/redimensionável (16:9); detecta bloqueio de embed e cai pra nova aba
+// @version      7.0
+// @description  Hub de jogos com lista puxada de um manifest no GitHub + jogos temporários locais; UI própria (tema azul, ícones SVG, FAB arrastável), janela flutuante arrastável/redimensionável (16:9); detecta bloqueio de embed e cai pra nova aba
 // @match        *://*/*
 // @grant        GM_registerMenuCommand
 // @grant        GM_setValue
@@ -18,7 +18,10 @@
 (function () {
   'use strict';
 
-  const MANIFEST_URL = 'https://github.com/zBeyond5/GamesHUB/blob/main/TMGames/manifest.json';
+  // ======= CONFIGURAÇÃO =======
+  // Troque pela URL "raw" do seu manifest.json no GitHub.
+  // Ex.: https://raw.githubusercontent.com/usuario/repo/main/games.json
+  const MANIFEST_URL = 'https://raw.githubusercontent.com/SEU_USUARIO/SEU_REPO/main/games.json';
 
   const TIMEOUT_DETECCAO_MS = 4000;
   const TIMEOUT_MANIFEST_MS = 8000;
@@ -35,6 +38,223 @@
       `${PREFIXO_LOG} GM_setValue/GM_getValue não disponíveis (verifique os @grant no gerenciador de userscripts). ` +
       `Usando localStorage como fallback — isso persiste só neste domínio.`
     );
+  }
+
+  // ================= ESTILO (tema gaming, azul, sofisticado) =================
+  function injetarEstilos() {
+    if (document.getElementById('gl-estilos')) return;
+    const style = document.createElement('style');
+    style.id = 'gl-estilos';
+    style.textContent = `
+:root {
+  --gl-accent: #3b82f6;
+  --gl-accent-2: #60a5fa;
+  --gl-accent-glow: rgba(59, 130, 246, 0.55);
+  --gl-bg: #0a0e17;
+  --gl-bg-elevated: #101728;
+  --gl-bg-card: #141d33;
+  --gl-bg-card-hover: #182446;
+  --gl-border: #22314f;
+  --gl-border-soft: #1a2440;
+  --gl-text: #e8ecf6;
+  --gl-text-dim: #8a94ab;
+  --gl-danger: #ef4444;
+  --gl-danger-soft: rgba(239, 68, 68, 0.15);
+  --gl-success: #22c55e;
+  --gl-success-soft: rgba(34, 197, 94, 0.15);
+  --gl-warn: #f59e0b;
+  --gl-warn-soft: rgba(245, 158, 11, 0.12);
+  --gl-radius: 12px;
+  --gl-radius-sm: 8px;
+  --gl-font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+}
+.gl-scope, .gl-scope * { box-sizing: border-box; font-family: var(--gl-font); }
+.gl-scope { color: var(--gl-text); }
+
+@keyframes gl-fade-in { from { opacity: 0; transform: translateY(4px) scale(0.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
+@keyframes gl-fade-in-center { from { opacity: 0; transform: translate(-50%, -50%) scale(0.96); } to { opacity: 1; transform: translate(-50%, -50%) scale(1); } }
+@keyframes gl-pulse-ring {
+  0%   { box-shadow: 0 0 0 0 var(--gl-accent-glow), 0 4px 18px rgba(0,0,0,0.5); }
+  70%  { box-shadow: 0 0 0 10px rgba(59,130,246,0), 0 4px 18px rgba(0,0,0,0.5); }
+  100% { box-shadow: 0 0 0 0 rgba(59,130,246,0), 0 4px 18px rgba(0,0,0,0.5); }
+}
+@keyframes gl-spin { to { transform: rotate(360deg); } }
+
+.gl-fab {
+  position: fixed; z-index: 999999; width: 56px; height: 56px; border-radius: 50%;
+  background: linear-gradient(145deg, var(--gl-accent), #1d4ed8);
+  border: 1px solid rgba(255,255,255,0.15);
+  color: #fff; display: flex; align-items: center; justify-content: center;
+  cursor: grab; user-select: none;
+  animation: gl-pulse-ring 2.8s infinite;
+  transition: transform 150ms ease, filter 150ms ease;
+}
+.gl-fab:hover { transform: scale(1.06); filter: brightness(1.1); }
+.gl-fab:active { cursor: grabbing; transform: scale(0.97); }
+.gl-fab svg { width: 26px; height: 26px; pointer-events: none; }
+
+.gl-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  border: 1px solid var(--gl-border); border-radius: var(--gl-radius-sm);
+  background: var(--gl-bg-elevated); color: var(--gl-text);
+  font-size: 12px; font-weight: 600; padding: 8px 12px; cursor: pointer;
+  transition: background 150ms ease, border-color 150ms ease, transform 100ms ease, filter 150ms ease;
+}
+.gl-btn:hover { border-color: var(--gl-accent-2); filter: brightness(1.08); }
+.gl-btn:active { transform: scale(0.97); }
+.gl-btn:disabled { opacity: 0.5; cursor: default; transform: none; }
+.gl-btn-primary { background: linear-gradient(145deg, var(--gl-accent), #1d4ed8); border-color: transparent; color: #fff; }
+.gl-btn-danger { background: var(--gl-danger-soft); border-color: rgba(239,68,68,0.35); color: #fca5a5; }
+.gl-btn-icon { padding: 7px; border-radius: var(--gl-radius-sm); }
+.gl-btn-icon svg { width: 15px; height: 15px; }
+.gl-btn-play { background: var(--gl-success-soft); border-color: rgba(34,197,94,0.4); color: #86efac; }
+
+.gl-input {
+  width: 100%; background: var(--gl-bg); color: var(--gl-text);
+  border: 1px solid var(--gl-border); border-radius: var(--gl-radius-sm);
+  padding: 9px 11px; font-size: 12.5px; outline: none;
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+.gl-input:focus { border-color: var(--gl-accent); box-shadow: 0 0 0 3px rgba(59,130,246,0.18); }
+.gl-input::placeholder { color: var(--gl-text-dim); }
+
+.gl-backdrop {
+  position: fixed; inset: 0; z-index: 2147483647;
+  background: rgba(5, 8, 15, 0.65); backdrop-filter: blur(2px);
+  display: flex; align-items: center; justify-content: center;
+}
+.gl-card {
+  width: 280px; background: var(--gl-bg-elevated); border: 1px solid var(--gl-border);
+  border-radius: var(--gl-radius); padding: 18px;
+  box-shadow: 0 20px 50px rgba(0,0,0,0.55), 0 0 0 1px rgba(59,130,246,0.08);
+  animation: gl-fade-in 160ms ease;
+}
+.gl-card-title { font-size: 14px; font-weight: 700; letter-spacing: 0.2px; margin-bottom: 3px; display: flex; align-items: center; gap: 7px; }
+.gl-card-title svg { width: 16px; height: 16px; color: var(--gl-accent-2); }
+.gl-card-sub { font-size: 11px; color: var(--gl-text-dim); margin-bottom: 12px; line-height: 1.4; }
+.gl-card-error { color: var(--gl-danger); font-size: 11px; min-height: 14px; margin: 2px 0 8px; }
+.gl-card-row { display: flex; gap: 8px; margin-top: 4px; }
+.gl-field { margin-bottom: 8px; }
+
+.gl-panel {
+  position: fixed; z-index: 2147483647;
+  top: 50%; left: 50%; transform: translate(-50%, -50%);
+  width: 360px; max-height: 82vh; display: flex; flex-direction: column;
+  background: var(--gl-bg-elevated); border: 1px solid var(--gl-border);
+  border-radius: var(--gl-radius); overflow: hidden;
+  box-shadow: 0 24px 60px rgba(0,0,0,0.6), 0 0 0 1px rgba(59,130,246,0.06);
+  animation: gl-fade-in-center 180ms ease;
+}
+.gl-panel-header {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 13px 14px; background: var(--gl-bg-card);
+  border-bottom: 1px solid var(--gl-border-soft); flex-shrink: 0;
+}
+.gl-panel-title { font-size: 13.5px; font-weight: 700; letter-spacing: 0.3px; display: flex; align-items: center; gap: 8px; }
+.gl-panel-title svg { width: 17px; height: 17px; color: var(--gl-accent-2); }
+.gl-panel-actions { display: flex; gap: 6px; }
+.gl-spin { animation: gl-spin 800ms linear infinite; }
+
+.gl-banner {
+  display: flex; align-items: flex-start; gap: 8px;
+  padding: 9px 14px; font-size: 11px; color: #fcd34d; background: var(--gl-warn-soft);
+  border-bottom: 1px solid var(--gl-border-soft);
+}
+.gl-banner svg { width: 14px; height: 14px; flex-shrink: 0; margin-top: 1px; color: var(--gl-warn); }
+
+.gl-list { overflow-y: auto; flex: 1; padding: 10px; display: flex; flex-direction: column; gap: 7px; }
+.gl-list::-webkit-scrollbar { width: 8px; }
+.gl-list::-webkit-scrollbar-thumb { background: var(--gl-border); border-radius: 8px; }
+
+.gl-empty { color: var(--gl-text-dim); font-size: 12px; padding: 30px 10px; text-align: center; line-height: 1.5; }
+
+.gl-game-card {
+  display: flex; align-items: center; gap: 10px; padding: 9px; border-radius: var(--gl-radius-sm);
+  background: var(--gl-bg-card); border: 1px solid transparent;
+  transition: background 150ms ease, border-color 150ms ease, transform 100ms ease;
+}
+.gl-game-card:hover { border-color: var(--gl-border); transform: translateY(-1px); }
+.gl-thumb {
+  width: 42px; height: 42px; flex-shrink: 0; border-radius: 9px;
+  background: var(--gl-bg); display: flex; align-items: center; justify-content: center;
+  overflow: hidden; color: var(--gl-accent-2); border: 1px solid var(--gl-border-soft);
+}
+.gl-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.gl-thumb svg { width: 20px; height: 20px; }
+.gl-game-info { flex: 1; min-width: 0; }
+.gl-game-name { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gl-game-meta { display: flex; align-items: center; gap: 6px; margin-top: 3px; flex-wrap: wrap; }
+.gl-badge {
+  font-size: 9.5px; font-weight: 700; letter-spacing: 0.3px; text-transform: uppercase;
+  padding: 2px 6px; border-radius: 5px; display: inline-flex; align-items: center; gap: 3px;
+}
+.gl-badge-ok { background: var(--gl-success-soft); color: #86efac; }
+.gl-badge-bloqueado { background: var(--gl-danger-soft); color: #fca5a5; }
+.gl-badge-neutro { background: rgba(148,163,184,0.15); color: #cbd5e1; }
+.gl-tag { font-size: 9.5px; color: var(--gl-text-dim); }
+.gl-game-actions { display: flex; gap: 6px; flex-shrink: 0; }
+
+.gl-panel-footer { border-top: 1px solid var(--gl-border-soft); padding: 11px 12px; background: var(--gl-bg-card); flex-shrink: 0; }
+
+.gl-overlay {
+  position: fixed; z-index: 2147483647;
+  background: var(--gl-bg); display: flex; flex-direction: column;
+  border: 1px solid var(--gl-border); border-radius: var(--gl-radius); overflow: hidden;
+  box-shadow: 0 24px 60px rgba(0,0,0,0.6), 0 0 0 1px rgba(59,130,246,0.06);
+  transition: left 180ms ease, top 180ms ease, width 180ms ease, height 180ms ease, border-radius 180ms ease;
+}
+.gl-overlay.gl-no-transition { transition: none; }
+.gl-overlay-bar {
+  display: flex; justify-content: space-between; align-items: center;
+  background: var(--gl-bg-card); padding: 7px 8px 7px 12px;
+  cursor: move; user-select: none; flex-shrink: 0; border-bottom: 1px solid var(--gl-border-soft);
+}
+.gl-overlay-title { font-size: 12px; font-weight: 600; color: var(--gl-text-dim); pointer-events: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center; gap: 6px; }
+.gl-overlay-title svg { width: 13px; height: 13px; color: var(--gl-accent-2); flex-shrink: 0; }
+.gl-overlay-controls { display: flex; gap: 4px; flex-shrink: 0; }
+.gl-overlay-body { flex: 1; position: relative; min-height: 0; overflow: hidden; }
+.gl-overlay-body iframe { width: 100%; height: 100%; border: none; display: block; }
+.gl-resize-handle {
+  position: absolute; right: 0; bottom: 0; width: 18px; height: 18px; z-index: 10;
+  cursor: nwse-resize;
+}
+.gl-resize-handle::after {
+  content: ''; position: absolute; right: 4px; bottom: 4px; width: 9px; height: 9px;
+  background: linear-gradient(135deg, transparent 50%, var(--gl-border) 50%);
+  border-radius: 0 0 3px 0; transition: background 150ms ease;
+}
+.gl-resize-handle:hover::after { background: linear-gradient(135deg, transparent 50%, var(--gl-accent) 50%); }
+.gl-dica {
+  position: absolute; top: 44px; right: 8px; z-index: 20; max-width: 220px;
+  background: var(--gl-bg-elevated); color: var(--gl-text); font-size: 11.5px; line-height: 1.4;
+  padding: 9px 11px; border-radius: var(--gl-radius-sm); border: 1px solid var(--gl-border);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.5); animation: gl-fade-in 150ms ease;
+}
+    `;
+    document.head.appendChild(style);
+  }
+
+  // ================= ÍCONES (SVG inline, stroke = currentColor) =================
+  function icone(nome, tamanho) {
+    const t = tamanho || 18;
+    const mapa = {
+      gamepad: '<path d="M6 11h4M8 9v4"/><circle cx="16" cy="10.5" r="0.6" fill="currentColor" stroke="none"/><circle cx="18" cy="12.5" r="0.6" fill="currentColor" stroke="none"/><rect x="2" y="7" width="20" height="10" rx="5"/>',
+      fechar: '<path d="M18 6 6 18M6 6l12 12"/>',
+      play: '<path d="M7 4v16l13-8z" fill="currentColor" stroke="none"/>',
+      voltar: '<path d="M15 18l-6-6 6-6"/>',
+      somOn: '<path d="M11 5 6 9H2v6h4l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18 6a9 9 0 0 1 0 12"/>',
+      somOff: '<path d="M11 5 6 9H2v6h4l5 4V5z"/><path d="M23 9l-6 6M17 9l6 6"/>',
+      minimizar: '<path d="M5 12h14"/>',
+      maximizar: '<rect x="4" y="4" width="16" height="16" rx="3"/>',
+      restaurar: '<rect x="8" y="8" width="12" height="12" rx="3"/><path d="M4 16V6a2 2 0 0 1 2-2h10"/>',
+      atualizar: '<path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10"/><path d="M20.49 15a9 9 0 0 1-14.85 3.36L1 14"/>',
+      mais: '<path d="M12 5v14M5 12h14"/>',
+      lixeira: '<path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>',
+      alerta: '<path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4"/><path d="M12 17h.01"/>',
+      check: '<path d="M20 6 9 17l-5-5"/>',
+      bloqueio: '<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>',
+    };
+    return `<svg viewBox="0 0 24 24" width="${t}" height="${t}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${mapa[nome] || ''}</svg>`;
   }
 
   // ---------- Storage (GM_* síncrona ou GM.* assíncrona, com backup em localStorage) ----------
@@ -79,7 +299,6 @@
     } catch (e) {
       console.error(`${PREFIXO_LOG} erro ao salvar backup de "${chave}" em localStorage:`, e);
     }
-    console.log(`${PREFIXO_LOG} salvo "${chave}" (GM storage: ${salvouGM ? 'ok' : 'indisponível, usando só backup'})`, valor);
   }
 
   async function carregarConfigJanela() {
@@ -88,6 +307,13 @@
   }
   function salvarConfigJanela(cfg) {
     salvarStorage('launcher-layout', cfg);
+  }
+
+  async function carregarPosicaoFab() {
+    return await lerStorage('launcher-fab-pos', null); // null = usa posição padrão (canto inferior direito)
+  }
+  function salvarPosicaoFab(pos) {
+    salvarStorage('launcher-fab-pos', pos);
   }
 
   function gerarId(prefixo) {
@@ -126,16 +352,27 @@
     });
   }
 
+  // Se o usuário colar o link normal do GitHub (github.com/.../blob/...), converte
+  // automaticamente pra URL "raw" — evita o erro clássico de receber HTML em vez de JSON.
+  function normalizarUrlManifest(url) {
+    const m = url.match(/^https?:\/\/github\.com\/([^/]+)\/([^/]+)\/blob\/(.+)$/i);
+    if (m) return `https://raw.githubusercontent.com/${m[1]}/${m[2]}/${m[3]}`;
+    return url;
+  }
+
   // Normaliza um item cru do manifest pro formato interno de jogo.
   function normalizarJogoManifest(item) {
     if (!item || typeof item.nome !== 'string' || typeof item.url !== 'string') return null;
     let url = item.url.trim();
     if (!url) return null;
     if (!/^https?:\/\//i.test(url)) url = 'https://' + url;
+    let imagem = typeof item.imagem === 'string' ? item.imagem.trim() : '';
+    if (imagem && !/^https?:\/\//i.test(imagem)) imagem = 'https://' + imagem;
     return {
       id: typeof item.id === 'string' && item.id ? 'manifest-' + item.id : gerarId('manifest-'),
       nome: item.nome.trim(),
       url,
+      imagem: imagem || null,
       origem: 'manifest',
       status: 'nao-testado',
       ultimoTeste: null,
@@ -144,14 +381,24 @@
 
   // Busca o manifest no GitHub; em caso de falha usa o último cache salvo localmente.
   async function carregarJogosManifest(forcarAtualizacao) {
-    const cache = await lerStorage('launcher-manifest-cache', { jogos: [], atualizadoEm: null, erro: null });
+    const cacheBruto = await lerStorage('launcher-manifest-cache', { jogos: [], atualizadoEm: null, erro: null });
+    // Blindagem: se algum estado antigo/corrompido tiver "jogos" fora do formato de array,
+    // normaliza aqui pra nunca quebrar o .forEach mais adiante.
+    const cache = { ...cacheBruto, jogos: Array.isArray(cacheBruto.jogos) ? cacheBruto.jogos : [] };
     if (!forcarAtualizacao && cache.jogos.length) {
       // ainda tenta atualizar em segundo plano, mas devolve o cache na hora
       atualizarManifestEmSegundoPlano();
       return cache;
     }
     try {
-      const texto = await buscarTexto(MANIFEST_URL, TIMEOUT_MANIFEST_MS);
+      const url = normalizarUrlManifest(MANIFEST_URL);
+      const texto = await buscarTexto(url, TIMEOUT_MANIFEST_MS);
+      if (texto.trim().startsWith('<')) {
+        throw new Error(
+          'a URL devolveu HTML em vez de JSON — confira se MANIFEST_URL aponta pro link "raw" ' +
+          '(raw.githubusercontent.com), e não pra página normal do arquivo no GitHub.'
+        );
+      }
       const bruto = JSON.parse(texto);
       const listaBruta = Array.isArray(bruto) ? bruto : Array.isArray(bruto.jogos) ? bruto.jogos : null;
       if (!listaBruta) throw new Error('formato inválido: esperava um array ou { "jogos": [...] }');
@@ -182,81 +429,74 @@
     salvarStorage('launcher-jogos-temporarios', lista);
   }
 
-  function estiloCampo() {
-    return `
-      background: #0d0d0d; color: #eee; border: 1px solid #333; border-radius: 4px;
-      padding: 7px 9px; font-size: 12px; font-family: Arial, sans-serif; width: 100%; box-sizing: border-box;
-    `;
-  }
-
-  function statusIcone(status) {
-    if (status === 'ok') return '✅';
-    if (status === 'bloqueado') return '🚫';
-    return '➖';
-  }
-  function statusTexto(status) {
-    if (status === 'ok') return 'Funcionou';
-    if (status === 'bloqueado') return 'Bloqueado (abre em nova aba)';
-    return 'Não testado';
+  function statusInfo(status) {
+    if (status === 'ok') return { icone: 'check', classe: 'gl-badge-ok', texto: 'Funcionou' };
+    if (status === 'bloqueado') return { icone: 'bloqueio', classe: 'gl-badge-bloqueado', texto: 'Bloqueado' };
+    return { icone: null, classe: 'gl-badge-neutro', texto: 'Não testado' };
   }
 
   // ---------- Modal simples pra adicionar um jogo temporário ----------
   function abrirModalJogoTemporario(aoConfirmar) {
-    if (document.getElementById('launcher-temp-modal')) return;
+    if (document.getElementById('gl-temp-modal')) return;
+    injetarEstilos();
 
     const fundo = document.createElement('div');
-    fundo.id = 'launcher-temp-modal';
-    fundo.style.cssText = `
-      position: fixed; inset: 0; z-index: 2147483647;
-      background: rgba(0,0,0,0.55); display: flex; align-items: center; justify-content: center;
-    `;
+    fundo.id = 'gl-temp-modal';
+    fundo.className = 'gl-scope gl-backdrop';
 
     const card = document.createElement('div');
-    card.style.cssText = `
-      width: 260px; background: #111; border: 1px solid #333; border-radius: 8px;
-      padding: 16px; font-family: Arial, sans-serif; color: #eee;
-      box-shadow: 0 8px 30px rgba(0,0,0,0.6);
-    `;
+    card.className = 'gl-card';
 
     const titulo = document.createElement('div');
-    titulo.textContent = '＋ Jogo temporário';
-    titulo.style.cssText = 'font-size: 14px; font-weight: bold; margin-bottom: 4px;';
+    titulo.className = 'gl-card-title';
+    titulo.innerHTML = `${icone('mais', 16)} Jogo temporário`;
 
     const legenda = document.createElement('div');
+    legenda.className = 'gl-card-sub';
     legenda.textContent = 'Fica salvo só neste dispositivo, separado da lista do manifest.';
-    legenda.style.cssText = 'font-size: 11px; color: #888; margin-bottom: 10px;';
 
+    const campoNome = document.createElement('div');
+    campoNome.className = 'gl-field';
     const inputNome = document.createElement('input');
+    inputNome.className = 'gl-input';
     inputNome.placeholder = 'Nome do jogo';
-    inputNome.style.cssText = estiloCampo() + 'margin-bottom: 6px;';
+    campoNome.appendChild(inputNome);
 
+    const campoUrl = document.createElement('div');
+    campoUrl.className = 'gl-field';
     const inputUrl = document.createElement('input');
+    inputUrl.className = 'gl-input';
     inputUrl.placeholder = 'https://...';
-    inputUrl.style.cssText = estiloCampo() + 'margin-bottom: 6px;';
+    campoUrl.appendChild(inputUrl);
+
+    const campoImagem = document.createElement('div');
+    campoImagem.className = 'gl-field';
+    const inputImagem = document.createElement('input');
+    inputImagem.className = 'gl-input';
+    inputImagem.placeholder = 'URL da imagem (opcional)';
+    campoImagem.appendChild(inputImagem);
 
     const erro = document.createElement('div');
-    erro.style.cssText = 'color: #f87171; font-size: 11px; min-height: 14px; margin-bottom: 6px;';
+    erro.className = 'gl-card-error';
 
     const linhaBotoes = document.createElement('div');
-    linhaBotoes.style.cssText = 'display: flex; gap: 6px;';
+    linhaBotoes.className = 'gl-card-row';
 
     const confirmarBtn = document.createElement('button');
+    confirmarBtn.className = 'gl-btn gl-btn-primary';
+    confirmarBtn.style.flex = '1';
     confirmarBtn.textContent = 'Adicionar';
-    confirmarBtn.style.cssText = `
-      flex: 1; background: #2563eb; color: #fff; border: none; border-radius: 4px;
-      padding: 8px; cursor: pointer; font-size: 12px; font-weight: bold;
-    `;
+
     const cancelarBtn = document.createElement('button');
+    cancelarBtn.className = 'gl-btn';
+    cancelarBtn.style.flex = '1';
     cancelarBtn.textContent = 'Cancelar';
-    cancelarBtn.style.cssText = `
-      flex: 1; background: #374151; color: #fff; border: none; border-radius: 4px;
-      padding: 8px; cursor: pointer; font-size: 12px;
-    `;
 
     card.appendChild(titulo);
     card.appendChild(legenda);
-    card.appendChild(inputNome);
-    card.appendChild(inputUrl);
+    card.appendChild(campoNome);
+    card.appendChild(campoUrl);
+    card.appendChild(campoImagem);
     card.appendChild(erro);
     linhaBotoes.appendChild(confirmarBtn);
     linhaBotoes.appendChild(cancelarBtn);
@@ -275,6 +515,7 @@
     }
     document.addEventListener('keydown', aoTeclar);
     cancelarBtn.addEventListener('click', fechar);
+    fundo.addEventListener('mousedown', (e) => { if (e.target === fundo) fechar(); });
 
     confirmarBtn.addEventListener('click', () => {
       const nome = inputNome.value.trim();
@@ -284,11 +525,14 @@
         return;
       }
       if (!/^https?:\/\//i.test(url)) url = 'https://' + url;
+      let imagem = inputImagem.value.trim();
+      if (imagem && !/^https?:\/\//i.test(imagem)) imagem = 'https://' + imagem;
       fechar();
       aoConfirmar({
         id: gerarId('temp-'),
         nome,
         url,
+        imagem: imagem || null,
         origem: 'temporario',
         status: 'nao-testado',
         ultimoTeste: null,
@@ -298,54 +542,40 @@
 
   // ---------- Painel de lista de jogos ----------
   async function abrirPainelJogos() {
-    if (document.getElementById('launcher-painel')) return;
+    if (document.getElementById('gl-painel')) return;
+    injetarEstilos();
 
     const painel = document.createElement('div');
-    painel.id = 'launcher-painel';
-    painel.style.cssText = `
-      position: fixed; z-index: 2147483647;
-      top: 50%; left: 50%; transform: translate(-50%, -50%);
-      width: 340px; max-height: 80vh; display: flex; flex-direction: column;
-      background: #111; border: 1px solid #333; border-radius: 8px;
-      box-shadow: 0 8px 30px rgba(0,0,0,0.6);
-      font-family: Arial, sans-serif; color: #eee; overflow: hidden;
-    `;
+    painel.id = 'gl-painel';
+    painel.className = 'gl-scope gl-panel';
 
     const cabecalho = document.createElement('div');
-    cabecalho.style.cssText = `
-      display: flex; justify-content: space-between; align-items: center;
-      padding: 10px 12px; background: #1a1a1a; border-bottom: 1px solid #333;
-      flex-shrink: 0;
-    `;
+    cabecalho.className = 'gl-panel-header';
+
     const titulo = document.createElement('span');
-    titulo.textContent = '🎮 Jogos';
-    titulo.style.cssText = 'font-size: 13px; font-weight: bold;';
+    titulo.className = 'gl-panel-title';
+    titulo.innerHTML = `${icone('gamepad', 17)} Jogos`;
 
     const botoesCabecalho = document.createElement('div');
-    botoesCabecalho.style.cssText = 'display: flex; gap: 6px;';
+    botoesCabecalho.className = 'gl-panel-actions';
 
     const atualizarBtn = document.createElement('button');
-    atualizarBtn.textContent = '🔄';
+    atualizarBtn.className = 'gl-btn gl-btn-icon';
     atualizarBtn.title = 'Atualizar lista do manifest';
-    atualizarBtn.style.cssText = `
-      background: #374151; color: #fff; border: none; border-radius: 4px;
-      padding: 4px 8px; cursor: pointer; font-size: 12px;
-    `;
+    atualizarBtn.innerHTML = icone('atualizar', 15);
     atualizarBtn.addEventListener('click', async () => {
       atualizarBtn.disabled = true;
-      atualizarBtn.textContent = '⏳';
+      atualizarBtn.querySelector('svg').classList.add('gl-spin');
       await carregarJogosManifest(true);
       atualizarBtn.disabled = false;
-      atualizarBtn.textContent = '🔄';
+      atualizarBtn.querySelector('svg').classList.remove('gl-spin');
       renderizarLista();
     });
 
     const fecharBtn = document.createElement('button');
-    fecharBtn.textContent = '✕';
-    fecharBtn.style.cssText = `
-      background: #c0392b; color: #fff; border: none; border-radius: 4px;
-      padding: 4px 9px; cursor: pointer; font-size: 12px;
-    `;
+    fecharBtn.className = 'gl-btn gl-btn-icon gl-btn-danger';
+    fecharBtn.title = 'Fechar';
+    fecharBtn.innerHTML = icone('fechar', 15);
     fecharBtn.addEventListener('click', fecharPainel);
 
     botoesCabecalho.appendChild(atualizarBtn);
@@ -354,22 +584,18 @@
     cabecalho.appendChild(botoesCabecalho);
 
     const avisoManifest = document.createElement('div');
-    avisoManifest.style.cssText = 'padding: 6px 12px; font-size: 10px; color: #f87171; display: none; border-bottom: 1px solid #333;';
+    avisoManifest.className = 'gl-banner';
+    avisoManifest.style.display = 'none';
 
     const lista = document.createElement('div');
-    lista.style.cssText = 'overflow-y: auto; flex: 1; padding: 6px;';
+    lista.className = 'gl-list';
 
     const rodape = document.createElement('div');
-    rodape.style.cssText = `
-      border-top: 1px solid #333; padding: 10px 12px; background: #1a1a1a;
-      flex-shrink: 0;
-    `;
+    rodape.className = 'gl-panel-footer';
     const addTempBtn = document.createElement('button');
-    addTempBtn.textContent = '＋ Adicionar jogo temporário';
-    addTempBtn.style.cssText = `
-      width: 100%; background: #2563eb; color: #fff; border: none; border-radius: 4px;
-      padding: 8px; cursor: pointer; font-size: 12px; font-weight: bold;
-    `;
+    addTempBtn.className = 'gl-btn gl-btn-primary';
+    addTempBtn.style.width = '100%';
+    addTempBtn.innerHTML = `${icone('mais', 14)} Adicionar jogo temporário`;
     addTempBtn.addEventListener('click', () => {
       abrirModalJogoTemporario(async (novoJogo) => {
         const temporarios = await carregarJogosTemporarios();
@@ -395,32 +621,57 @@
       document.removeEventListener('keydown', aoTeclarEscPainel);
     }
 
+    function miniaturaJogo(jogo) {
+      const wrap = document.createElement('div');
+      wrap.className = 'gl-thumb';
+      if (jogo.imagem) {
+        const img = document.createElement('img');
+        img.src = jogo.imagem;
+        img.alt = jogo.nome;
+        img.addEventListener('error', () => {
+          img.remove();
+          wrap.innerHTML = icone('gamepad', 20);
+        });
+        wrap.appendChild(img);
+      } else {
+        wrap.innerHTML = icone('gamepad', 20);
+      }
+      return wrap;
+    }
+
     function linhaJogo(jogo, permiteRemover) {
       const linha = document.createElement('div');
-      linha.style.cssText = `
-        display: flex; align-items: center; gap: 8px;
-        padding: 8px; border-radius: 6px; margin-bottom: 4px;
-        background: #1a1a1a;
-      `;
+      linha.className = 'gl-game-card';
+      linha.appendChild(miniaturaJogo(jogo));
+
       const info = document.createElement('div');
-      info.style.cssText = 'flex: 1; min-width: 0;';
-      const linhaNome = document.createElement('div');
-      linhaNome.textContent = jogo.nome;
-      linhaNome.style.cssText = 'font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;';
-      const linhaStatus = document.createElement('div');
-      const origemTag = jogo.origem === 'temporario' ? ' · temporário' : '';
-      linhaStatus.textContent = `${statusIcone(jogo.status)} ${statusTexto(jogo.status)}${origemTag}`;
-      linhaStatus.style.cssText = 'font-size: 11px; color: #999;';
-      info.appendChild(linhaNome);
-      info.appendChild(linhaStatus);
+      info.className = 'gl-game-info';
+      const nome = document.createElement('div');
+      nome.className = 'gl-game-name';
+      nome.textContent = jogo.nome;
+      const meta = document.createElement('div');
+      meta.className = 'gl-game-meta';
+      const si = statusInfo(jogo.status);
+      const badge = document.createElement('span');
+      badge.className = 'gl-badge ' + si.classe;
+      badge.innerHTML = (si.icone ? icone(si.icone, 10) : '') + si.texto;
+      meta.appendChild(badge);
+      if (jogo.origem === 'temporario') {
+        const tag = document.createElement('span');
+        tag.className = 'gl-tag';
+        tag.textContent = 'temporário';
+        meta.appendChild(tag);
+      }
+      info.appendChild(nome);
+      info.appendChild(meta);
+
+      const acoes = document.createElement('div');
+      acoes.className = 'gl-game-actions';
 
       const jogarBtn = document.createElement('button');
-      jogarBtn.textContent = '▶';
+      jogarBtn.className = 'gl-btn gl-btn-icon gl-btn-play';
       jogarBtn.title = 'Jogar';
-      jogarBtn.style.cssText = `
-        background: #16a34a; color: #fff; border: none; border-radius: 4px;
-        padding: 6px 10px; cursor: pointer; font-size: 12px; flex-shrink: 0;
-      `;
+      jogarBtn.innerHTML = icone('play', 14);
       jogarBtn.addEventListener('click', () => {
         fecharPainel();
         abrirJogo(jogo, async (novoStatus) => {
@@ -438,31 +689,28 @@
           // só reflete na sessão atual.
         });
       });
-
-      linha.appendChild(info);
-      linha.appendChild(jogarBtn);
+      acoes.appendChild(jogarBtn);
 
       if (permiteRemover) {
         const removerBtn = document.createElement('button');
-        removerBtn.textContent = '✕';
+        removerBtn.className = 'gl-btn gl-btn-icon gl-btn-danger';
         removerBtn.title = 'Remover';
-        removerBtn.style.cssText = `
-          background: #374151; color: #fff; border: none; border-radius: 4px;
-          padding: 6px 9px; cursor: pointer; font-size: 12px; flex-shrink: 0;
-        `;
+        removerBtn.innerHTML = icone('lixeira', 14);
         removerBtn.addEventListener('click', async () => {
           const temporarios = (await carregarJogosTemporarios()).filter((j) => j.id !== jogo.id);
           salvarJogosTemporarios(temporarios);
           renderizarLista();
         });
-        linha.appendChild(removerBtn);
+        acoes.appendChild(removerBtn);
       }
 
+      linha.appendChild(info);
+      linha.appendChild(acoes);
       return linha;
     }
 
     async function renderizarLista() {
-      lista.innerHTML = '<div style="color:#888;font-size:12px;padding:10px;text-align:center;">Carregando...</div>';
+      lista.innerHTML = '<div class="gl-empty">Carregando...</div>';
 
       const [manifest, temporarios] = await Promise.all([
         carregarJogosManifest(false),
@@ -472,25 +720,25 @@
       lista.innerHTML = '';
 
       if (manifest.erro) {
-        avisoManifest.style.display = 'block';
-        avisoManifest.textContent = manifest.atualizadoEm
-          ? `⚠ Não deu pra atualizar o manifest agora (usando cache de ${new Date(manifest.atualizadoEm).toLocaleString()}).`
-          : `⚠ Não deu pra carregar o manifest: ${manifest.erro}`;
+        avisoManifest.style.display = 'flex';
+        avisoManifest.innerHTML = icone('alerta', 14) + '<span>' + (
+          manifest.atualizadoEm
+            ? `Não deu pra atualizar o manifest agora (usando cache de ${new Date(manifest.atualizadoEm).toLocaleString()}).`
+            : `Não deu pra carregar o manifest: ${manifest.erro}`
+        ) + '</span>';
       } else {
         avisoManifest.style.display = 'none';
       }
 
-      const todosOsJogos = [...manifest.jogos, ...temporarios];
+      const jogosManifest = Array.isArray(manifest.jogos) ? manifest.jogos : [];
+      const todosOsJogos = [...jogosManifest, ...temporarios];
 
       if (!todosOsJogos.length) {
-        const vazio = document.createElement('div');
-        vazio.textContent = 'Nenhum jogo disponível. Configure o manifest ou adicione um jogo temporário.';
-        vazio.style.cssText = 'color: #888; font-size: 12px; padding: 10px; text-align: center;';
-        lista.appendChild(vazio);
+        lista.innerHTML = '<div class="gl-empty">Nenhum jogo disponível.<br>Configure o manifest ou adicione um jogo temporário.</div>';
         return;
       }
 
-      manifest.jogos.forEach((jogo) => lista.appendChild(linhaJogo(jogo, false)));
+      jogosManifest.forEach((jogo) => lista.appendChild(linhaJogo(jogo, false)));
       temporarios.forEach((jogo) => lista.appendChild(linhaJogo(jogo, true)));
     }
 
@@ -499,7 +747,8 @@
 
   // ---------- Janela flutuante do jogo ----------
   async function abrirJogo(jogo, aoMudarStatus) {
-    if (document.getElementById('launcher-overlay')) return;
+    if (document.getElementById('gl-overlay')) return;
+    injetarEstilos();
 
     const cfg = await carregarConfigJanela();
     const larguraInicial = Math.min(Math.max(cfg.w, LARGURA_MIN), window.innerWidth - 20);
@@ -508,52 +757,42 @@
     const yInicial = cfg.y !== null ? Math.min(cfg.y, window.innerHeight - alturaInicial) : (window.innerHeight - alturaInicial) / 2;
 
     const overlay = document.createElement('div');
-    overlay.id = 'launcher-overlay';
-    overlay.style.cssText = `
-      position: fixed; z-index: 2147483647;
-      background: #000; display: flex; flex-direction: column;
-      border: 1px solid #333; border-radius: 8px; overflow: hidden;
-      box-shadow: 0 8px 30px rgba(0,0,0,0.6);
-      left: ${xInicial}px; top: ${yInicial}px;
-      width: ${larguraInicial}px; height: ${alturaInicial}px;
-      min-width: ${LARGURA_MIN}px; min-height: ${ALTURA_MIN}px;
-    `;
+    overlay.id = 'gl-overlay';
+    overlay.className = 'gl-scope gl-overlay gl-no-transition';
+    overlay.style.left = xInicial + 'px';
+    overlay.style.top = yInicial + 'px';
+    overlay.style.width = larguraInicial + 'px';
+    overlay.style.height = alturaInicial + 'px';
+    overlay.style.minWidth = LARGURA_MIN + 'px';
+    overlay.style.minHeight = ALTURA_MIN + 'px';
+    requestAnimationFrame(() => overlay.classList.remove('gl-no-transition'));
 
     let maximizado = !!cfg.maximizado;
     let estadoAntesMaximizar = null;
 
     const barra = document.createElement('div');
-    barra.style.cssText = `
-      display: flex; justify-content: space-between; align-items: center;
-      background: #111; padding: 6px 10px; font-family: Arial, sans-serif;
-      cursor: move; user-select: none; flex-shrink: 0;
-    `;
+    barra.className = 'gl-overlay-bar';
 
     const status = document.createElement('span');
-    status.textContent = `⚔ ${jogo.nome} — Carregando...`;
-    status.style.cssText = 'color: #aaa; font-size: 12px; pointer-events: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;';
+    status.className = 'gl-overlay-title';
+    status.innerHTML = `${icone('gamepad', 13)} <span>${jogo.nome} — Carregando...</span>`;
 
     const controles = document.createElement('div');
-    controles.style.cssText = 'display: flex; gap: 6px; flex-shrink: 0;';
+    controles.className = 'gl-overlay-controls';
 
-    function botao(texto, bg) {
+    function botao(nomeIcone, titulo, extraClasse) {
       const b = document.createElement('button');
-      b.textContent = texto;
-      b.style.cssText = `
-        background: ${bg}; color: #fff; border: none; border-radius: 4px;
-        padding: 6px 10px; cursor: pointer; font-family: Arial, sans-serif; font-size: 13px;
-        line-height: 1;
-      `;
+      b.className = 'gl-btn gl-btn-icon' + (extraClasse ? ' ' + extraClasse : '');
+      b.title = titulo;
+      b.innerHTML = icone(nomeIcone, 14);
       return b;
     }
 
-    const voltarBtn = botao('☰', '#374151');
-    voltarBtn.title = 'Voltar pro menu de jogos';
-    const mutarBtn = botao('🔊', '#374151');
-    mutarBtn.title = 'Mutar (script não alcança áudio de outra origem — clique pra ver como mutar pelo navegador)';
-    const minimizarBtn = botao('—', '#374151');
-    const maximizarBtn = botao('▢', '#374151');
-    const fecharBtn = botao('✕', '#c0392b');
+    const voltarBtn = botao('voltar', 'Voltar pro menu de jogos');
+    const mutarBtn = botao('somOn', 'Mutar (script não alcança áudio de outra origem — clique pra ver como mutar pelo navegador)');
+    const minimizarBtn = botao('minimizar', 'Minimizar');
+    const maximizarBtn = botao('maximizar', 'Maximizar');
+    const fecharBtn = botao('fechar', 'Fechar', 'gl-btn-danger');
 
     controles.appendChild(voltarBtn);
     controles.appendChild(mutarBtn);
@@ -564,21 +803,16 @@
     barra.appendChild(controles);
 
     const corpo = document.createElement('div');
-    corpo.style.cssText = 'flex: 1; position: relative; min-height: 0;';
+    corpo.className = 'gl-overlay-body';
 
     const iframe = document.createElement('iframe');
-    iframe.style.cssText = 'width: 100%; height: 100%; border: none; display: block;';
     iframe.setAttribute('allow', 'autoplay; fullscreen');
 
     corpo.appendChild(iframe);
 
     const alca = document.createElement('div');
+    alca.className = 'gl-resize-handle';
     alca.title = 'Arraste para redimensionar (trava em 16:9). Segure Shift para redimensionar livremente.';
-    alca.style.cssText = `
-      position: absolute; right: 0; bottom: 0; width: 16px; height: 16px;
-      cursor: nwse-resize; z-index: 10;
-      background: linear-gradient(135deg, transparent 50%, #555 50%);
-    `;
     corpo.appendChild(alca);
 
     overlay.appendChild(barra);
@@ -592,7 +826,7 @@
     let carregou = false;
     iframe.addEventListener('load', () => {
       carregou = true;
-      status.textContent = `⚔ ${jogo.nome}`;
+      status.innerHTML = `${icone('gamepad', 13)} <span>${jogo.nome}</span>`;
       if (aoMudarStatus) aoMudarStatus('ok');
     });
 
@@ -635,16 +869,11 @@
     let mutado = false;
     let dicaTimeout = null;
     function mostrarDica(texto) {
-      let dica = overlay.querySelector('#launcher-dica');
+      let dica = overlay.querySelector('#gl-dica');
       if (!dica) {
         dica = document.createElement('div');
-        dica.id = 'launcher-dica';
-        dica.style.cssText = `
-          position: absolute; top: 40px; right: 8px; z-index: 20;
-          background: #1f2937; color: #eee; font-family: Arial, sans-serif;
-          font-size: 12px; padding: 8px 10px; border-radius: 6px; max-width: 220px;
-          box-shadow: 0 4px 12px rgba(0,0,0,0.5); line-height: 1.4;
-        `;
+        dica.id = 'gl-dica';
+        dica.className = 'gl-dica';
         corpo.appendChild(dica);
       }
       dica.textContent = texto;
@@ -662,7 +891,7 @@
       } catch (e) {
         conseguiuMutarDireto = false;
       }
-      mutarBtn.textContent = mutado ? '🔇' : '🔊';
+      mutarBtn.innerHTML = icone(mutado ? 'somOff' : 'somOn', 14);
       if (!conseguiuMutarDireto) {
         mostrarDica(
           mutado
@@ -678,13 +907,13 @@
       minimizado = !minimizado;
       if (minimizado) {
         alturaAntesMinimizar = parseInt(overlay.style.height, 10);
-        overlay.style.height = '36px';
-        corpo.style.display = 'none';
-        minimizarBtn.textContent = '▢';
+        overlay.style.height = barra.offsetHeight + 'px';
+        minimizarBtn.innerHTML = icone('maximizar', 14);
+        minimizarBtn.title = 'Restaurar';
       } else {
         overlay.style.height = alturaAntesMinimizar + 'px';
-        corpo.style.display = 'block';
-        minimizarBtn.textContent = '—';
+        minimizarBtn.innerHTML = icone('minimizar', 14);
+        minimizarBtn.title = 'Minimizar';
       }
     });
 
@@ -699,14 +928,16 @@
         overlay.style.width = '100vw';
         overlay.style.height = '100vh';
         overlay.style.borderRadius = '0';
-        maximizarBtn.textContent = '❐';
+        maximizarBtn.innerHTML = icone('restaurar', 14);
+        maximizarBtn.title = 'Restaurar';
       } else if (estadoAntesMaximizar) {
         overlay.style.left = estadoAntesMaximizar.x;
         overlay.style.top = estadoAntesMaximizar.y;
         overlay.style.width = estadoAntesMaximizar.w;
         overlay.style.height = estadoAntesMaximizar.h;
-        overlay.style.borderRadius = '8px';
-        maximizarBtn.textContent = '▢';
+        overlay.style.borderRadius = '';
+        maximizarBtn.innerHTML = icone('maximizar', 14);
+        maximizarBtn.title = 'Maximizar';
       }
     }
     maximizarBtn.addEventListener('click', () => {
@@ -717,8 +948,9 @@
 
     let arrastando = false, offX = 0, offY = 0;
     barra.addEventListener('mousedown', (e) => {
-      if (maximizado || (e.target !== barra && e.target !== status)) return;
+      if (maximizado || (e.target !== barra && e.target !== status && !status.contains(e.target))) return;
       arrastando = true;
+      overlay.classList.add('gl-no-transition');
       capa.style.display = 'block';
       offX = e.clientX - overlay.offsetLeft;
       offY = e.clientY - overlay.offsetTop;
@@ -729,6 +961,7 @@
     alca.addEventListener('mousedown', (e) => {
       if (maximizado) return;
       redimensionando = true;
+      overlay.classList.add('gl-no-transition');
       capa.style.display = 'block';
       startX = e.clientX;
       startY = e.clientY;
@@ -788,23 +1021,73 @@
       }
       arrastando = false;
       redimensionando = false;
+      overlay.classList.remove('gl-no-transition');
       capa.style.display = 'none';
     });
   }
 
-  function criarBotaoFlutuante() {
-    if (document.getElementById('launcher-btn')) return;
+  // ---------- Botão flutuante (FAB)
+  async function criarBotaoFlutuante() {
+    if (document.getElementById('gl-fab')) return;
+    injetarEstilos();
+
     const btn = document.createElement('button');
-    btn.id = 'launcher-btn';
-    btn.textContent = '🎮 Jogos';
-    btn.style.cssText = `
-      position: fixed; bottom: 16px; right: 100px; z-index: 999999;
-      background: #7f1d1d; color: #fff; border: none; border-radius: 6px;
-      padding: 8px 14px; cursor: pointer; font-family: Arial, sans-serif;
-      font-size: 13px; box-shadow: 0 2px 8px rgba(0,0,0,0.4);
-    `;
-    btn.addEventListener('click', abrirPainelJogos);
+    btn.id = 'gl-fab';
+    btn.className = 'gl-scope gl-fab';
+    btn.title = 'Jogos';
+    btn.innerHTML = icone('gamepad', 26);
+
+    const posSalva = await carregarPosicaoFab();
+    if (posSalva && typeof posSalva.left === 'number' && typeof posSalva.top === 'number') {
+      btn.style.left = posSalva.left + 'px';
+      btn.style.top = posSalva.top + 'px';
+    } else {
+      btn.style.bottom = '20px';
+      btn.style.right = '20px';
+    }
+
     document.body.appendChild(btn);
+
+    let arrastou = false;
+    let arrastando = false;
+    let offX = 0, offY = 0;
+
+    btn.addEventListener('mousedown', (e) => {
+      arrastando = true;
+      arrastou = false;
+      const rect = btn.getBoundingClientRect();
+      offX = e.clientX - rect.left;
+      offY = e.clientY - rect.top;
+      btn.style.left = rect.left + 'px';
+      btn.style.top = rect.top + 'px';
+      btn.style.right = 'auto';
+      btn.style.bottom = 'auto';
+      e.preventDefault();
+    });
+
+    window.addEventListener('mousemove', (e) => {
+      if (!arrastando) return;
+      arrastou = true;
+      let novoX = e.clientX - offX;
+      let novoY = e.clientY - offY;
+      novoX = Math.max(4, Math.min(novoX, window.innerWidth - btn.offsetWidth - 4));
+      novoY = Math.max(4, Math.min(novoY, window.innerHeight - btn.offsetHeight - 4));
+      btn.style.left = novoX + 'px';
+      btn.style.top = novoY + 'px';
+    });
+
+    window.addEventListener('mouseup', () => {
+      if (!arrastando) return;
+      arrastando = false;
+      if (arrastou) {
+        salvarPosicaoFab({ left: parseInt(btn.style.left, 10), top: parseInt(btn.style.top, 10) });
+      }
+    });
+
+    btn.addEventListener('click', () => {
+      if (arrastou) return; 
+      abrirPainelJogos();
+    });
   }
 
   if (typeof GM_registerMenuCommand === 'function') {
@@ -812,7 +1095,7 @@
     GM_registerMenuCommand('Atualizar manifest agora', () => carregarJogosManifest(true));
   }
 
+  injetarEstilos();
   criarBotaoFlutuante();
-  // Busca o manifest assim que a página carrega, pra já ter cache pronto quando o painel abrir.
   carregarJogosManifest(false);
 })();
