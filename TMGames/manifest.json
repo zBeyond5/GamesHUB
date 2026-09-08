@@ -19,10 +19,26 @@
       "imagem": "https://cdn.phaser.io/news/2026/08/wild-willows-header.png"
     },
     {
-      "id": "takeactions",
-      "nome": "Take Actions",
-      "url": "https://www.crazygames.com/br/game/take-actions",
-      "imagem": "https://cdn.phaser.io/news/2026/08/wild-willows-header.png"
+  "game": "BodyCamera Shooter",
+  "version": "1.0",
+  "unity": {
+    "loaderUrl": "https://files.crazygames.com/bodycamera-shooter/36/Bodycam_CrazyGames_Build(90)/Build/Bodycam.loader.js",
+    "dataUrl": "https://files.crazygames.com/bodycamera-shooter/36/Bodycam_CrazyGames_Build(90)/Build/Bodycam.data.br",
+    "frameworkUrl": "https://files.crazygames.com/bodycamera-shooter/36/Bodycam_CrazyGames_Build(90)/Build/Bodycam.framework.js.br",
+    "codeUrl": "https://files.crazygames.com/bodycamera-shooter/36/Bodycam_CrazyGames_Build(90)/Build/Bodycam.wasm.br"
+    },
+  "controls": {
+    "WASD": "Mover",
+    "Shift": "Correr",
+    "Espaço": "Pular",
+    "C": "Agachar",
+    "Clique esquerdo": "Atirar",
+    "Clique direito": "Mirar",
+    "R": "Recarregar",
+    "1,2,3": "Trocar arma",
+    "Tab": "Pausar"
+  }
+}
     }
   ]
 }
