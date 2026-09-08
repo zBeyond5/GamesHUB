@@ -1,8 +1,9 @@
 // ==UserScript==
-// @name         SangLauncher
+// @name         Game Launcher (janela flutuante)
 // @namespace    devchris
 // @version      7.0
-// @description  Hub de jogos 
+// @description  Hub de jogos com lista puxada de um manifest no GitHub + jogos temporários locais; UI própria (tema azul, ícones SVG, FAB arrastável), janela flutuante arrastável/redimensionável (16:9); detecta bloqueio de embed e cai pra nova aba
+// @match        *://*/*
 // @grant        GM_registerMenuCommand
 // @grant        GM_setValue
 // @grant        GM_getValue
@@ -17,6 +18,9 @@
 (function () {
   'use strict';
 
+  // ======= CONFIGURAÇÃO =======
+  // Troque pela URL "raw" do seu manifest.json no GitHub.
+  // Ex.: https://raw.githubusercontent.com/usuario/repo/main/games.json
   const MANIFEST_URL = 'https://raw.githubusercontent.com/zBeyond5/GamesHUB/refs/heads/main/TMGames/manifest.json';
 
   const TIMEOUT_DETECCAO_MS = 4000;
@@ -419,7 +423,10 @@
 
   // ---------- Jogos temporários (adicionados localmente, não vêm do manifest) ----------
   async function carregarJogosTemporarios() {
-    return await lerStorage('launcher-jogos-temporarios', []);
+    const lista = await lerStorage('launcher-jogos-temporarios', []);
+    // Blindagem: se algum estado antigo/corrompido não for um array, reseta pra vazio
+    // em vez de deixar o resto do código quebrar mais adiante.
+    return Array.isArray(lista) ? lista : [];
   }
   function salvarJogosTemporarios(lista) {
     salvarStorage('launcher-jogos-temporarios', lista);
@@ -727,7 +734,8 @@
       }
 
       const jogosManifest = Array.isArray(manifest.jogos) ? manifest.jogos : [];
-      const todosOsJogos = [...jogosManifest, ...temporarios];
+      const jogosTemp = Array.isArray(temporarios) ? temporarios : [];
+      const todosOsJogos = [...jogosManifest, ...jogosTemp];
 
       if (!todosOsJogos.length) {
         lista.innerHTML = '<div class="gl-empty">Nenhum jogo disponível.<br>Configure o manifest ou adicione um jogo temporário.</div>';
@@ -735,7 +743,7 @@
       }
 
       jogosManifest.forEach((jogo) => lista.appendChild(linhaJogo(jogo, false)));
-      temporarios.forEach((jogo) => lista.appendChild(linhaJogo(jogo, true)));
+      jogosTemp.forEach((jogo) => lista.appendChild(linhaJogo(jogo, true)));
     }
 
     renderizarLista();
@@ -1022,7 +1030,7 @@
     });
   }
 
-  // ---------- Botão flutuante (FAB)
+  // ---------- Botão flutuante (FAB) — arrastável, posição persistida ----------
   async function criarBotaoFlutuante() {
     if (document.getElementById('gl-fab')) return;
     injetarEstilos();
@@ -1081,7 +1089,7 @@
     });
 
     btn.addEventListener('click', () => {
-      if (arrastou) return; 
+      if (arrastou) return; // evita abrir o painel logo após um drag
       abrirPainelJogos();
     });
   }
@@ -1093,5 +1101,6 @@
 
   injetarEstilos();
   criarBotaoFlutuante();
+  // Busca o manifest assim que a página carrega, pra já ter cache pronto quando o painel abrir.
   carregarJogosManifest(false);
 })();
