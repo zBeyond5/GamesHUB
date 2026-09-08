@@ -1,3 +1,4 @@
+
 {
   "jogos": [
     {
@@ -5,42 +6,132 @@
       "nome": "Knightfall Arena",
       "url": "https://knightfallarena.io/",
       "imagem": "https://cdn.phaser.io/news/2026/08/knightfall-arena-header.png"
+      "genero": "Survival RPG / Ação / Multiplayer"
     },
     {
       "id": "geometrydash",
       "nome": "Geometry Dash",
       "url": "https://www.geometrydash.com/",
       "imagem": "https://cdn.phaser.io/news/2026/06/geometry-dash-header.png"
+      "genero": "Plataforma / Ritmo"
     },
     {
       "id": "wildwillow",
       "nome": "Wild Willow",
       "url": "https://play.wildwillows.app/",
       "imagem": "https://cdn.phaser.io/news/2026/08/wild-willows-header.png"
-    }
-  ],
-  "unity_games": {
-    "bodycamera": {
-      "nome": "BodyCamera Shooter",
-      "url": "https://www.crazygames.com/br/game/bodycamera-shooter",
-      "imagem": "https://www.crazygames.com/bodycamera-shooter_16x9/20260702042958/bodycamera-shooter_16x9-cover",
-      "unity": {
-        "loaderUrl": "https://files.crazygames.com/bodycamera-shooter/36/Bodycam_CrazyGames_Build(90)/Build/Bodycam.loader.js",
-        "dataUrl": "https://files.crazygames.com/bodycamera-shooter/36/Bodycam_CrazyGames_Build(90)/Build/Bodycam.data.br",
-        "frameworkUrl": "https://files.crazygames.com/bodycamera-shooter/36/Bodycam_CrazyGames_Build(90)/Build/Bodycam.framework.js.br",
-        "codeUrl": "https://files.crazygames.com/bodycamera-shooter/36/Bodycam_CrazyGames_Build(90)/Build/Bodycam.wasm.br"
-      },
-      "controls": {
-        "WASD": "Mover",
-        "Shift": "Correr",
-        "Espaço": "Pular",
-        "C": "Agachar",
-        "Clique esquerdo": "Atirar",
-        "Clique direito": "Mirar",
-        "R": "Recarregar",
-        "1,2,3": "Trocar arma",
-        "Tab": "Pausar"
-      }
-    }
+      "genero": "Simulação de Vida / Cozy / Restauração da Natureza"
+    },
+  {
+    "id": "the-daily-delvers-rpg",
+    "nome": "The Daily Delvers",
+    "url": "https://play.pathfinders.gala.games/",
+    "imagem": "https://news.gala.com/wp-content/uploads/2026/07/the_daily_delvers_blog_header_1920x1080-980x551.png",
+    "genero": "RPG / Dungeon Crawler / Idle"
+  },
+  {
+    "id": "siegecity",
+    "nome": "SiegeCity",
+    "url": "https://siegecity.com/",
+    "imagem": "https://www.google.com/s2/favicons?domain=siegecity.com&sz=256",
+    "genero": "Tower Defense / Estratégia"
+  },
+  {
+    "id": "mirandus",
+    "nome": "Mirandus",
+    "url": "https://play.mirandus.game/",
+    "imagem": "https://news.gala.com/wp-content/uploads/2026/08/Blogpost_MEN_16-9-7-980x551.jpg",
+    "genero": "MMORPG / RPG / Aventura"
+  },
+  {
+    "id": "fields-of-fury",
+    "nome": "Fields of Fury",
+    "url": "https://www.fieldsoffury.io/",
+    "imagem": "https://thumbnails.gamenora.com/Fields%20of%20Fury.webp",
+    "genero": "FPS / Shooter / Multiplayer"
+  },
+  {
+    "id": "swoomp",
+    "nome": "Swooop",
+    "url": "https://playcanv.as/p/JtL2iqIH/",
+    "imagem": "https://blog.playcanvas.com/assets/images/swooop_blog-d5b93b8cf58430fa84e31f51958c7708.jpg",
+    "genero": "Ação / Arcade / Voo"
+  },
+  {
+    "id": "venge-fps",
+    "nome": "Venge",
+    "url": "https://venge.io/",
+    "imagem": "https://img.gamepix.com/games/venge-io/cover/venge-io.png?w=320&ar=16:10",
+    "genero": "FPS / Shooter / Multiplayer"
+  },
+  {
+    "id": "horizon-drive",
+    "nome": "Horizon Drive",
+    "url": "https://www.shopify.com/ca/editions/summer2025/drive",
+    "imagem": "https://cdn.dlcompare.com/game_tetiere/upload/gameimage/file/drive-beyond-horizons-tetiere-file-b27a1a46.jpg.webp",
+    "genero": "Corrida / Direção / Arcade"
+  },
+  {
+    "id": "messenger",
+    "nome": "Messenger",
+    "url": "https://messenger.abeto.co/",
+    "imagem": "https://threejsresources.com/_next/image?url=https%3A%2F%2Fthreejsresources.s3.eu-north-1.amazonaws.com%2Fmedia%2Fabeto.png&w=640&q=75",
+    "genero": "Aventura / Exploração / Cozy"
+  },
+  {
+    "id": "taxi-game",
+    "nome": "Taxi Game",
+    "url": "https://great-taxi-assignment.netlify.app/",
+    "imagem": "https://www.google.com/s2/favicons?domain=great-taxi-assignment.netlify.app&sz=256",
+    "genero": "Simulação / Direção / Casual"
+  },
+  {
+    "id": "mmorpg-stein-world",
+    "nome": "[MMORPG] Stein World",
+    "url": "https://stein.world/",
+    "imagem": "https://img.itch.zone/aW1nLzIwMjg0OTUucG5n/original/uppglz.png",
+    "genero": "MMORPG / RPG / Ação / Aventura"
+  },
+  {
+    "id": "poly-track",
+    "nome": "Poly Track",
+    "url": "https://www.kodub.com/apps/polytrack",
+    "imagem": "https://img.itch.zone/aW1nLzE4MjM5NjMyLnBuZw==/32x32%23/%2F3wS4V.png",
+    "genero": "Corrida / Arcade / Direção"
+  },
+  {
+    "id": "minecraft",
+    "nome": "Minecraft",
+    "url": "https://mine-craft.io/",
+    "imagem": "https://www.google.com/s2/favicons?domain=mine-craft.io&sz=256",
+    "genero": "Survival / Sandbox / Multiplayer"
+  },
+  {
+    "id": "world-flight",
+    "nome": "World Flight",
+    "url": "https://worldflightsimulator.com/",
+    "imagem": "https://worldflightsim.com/assets/og/wfs-og-explore.png",
+    "genero": "Simulação de Voo / Simulação / Multiplayer"
+  },
+  {
+    "id": "fnf",
+    "nome": "FNF",
+    "url": "https://fridaynightfunkin2.io/friday-night-funkin.embed",
+    "imagem": "https://imgs.search.brave.com/38OUAjhe4rx-3RAWHKTrtD1jq99O2p9IT3t4o4vzKtg/rs:fit:860:0:0:0/g:ce/aHR0cHM6Ly93d3cu/cG5nYWxsLmNvbS93/cC1jb250ZW50L3Vw/bG9hZHMvMTQvRnJp/ZGF5LU5pZ2h0LUZ1/bmtpbi1Cb3lmcmll/bmQtUE5HLUltYWdl/cy10aHVtYi53ZWJw",
+    "genero": "Ritmo / Música"
+  },
+  {
+    "id": "serenitrove",
+    "nome": "SereniTrove",
+    "url": "https://www.miniplay.com/embed/serenitrove",
+    "imagem": "https://external-preview.redd.it/serenitrove-a-little-digging-game-v0-TDfbXvxrIgWLJgKNXpvKK8b_an0-QyGT4NGmTf2rSjg.png?width=640&crop=smart&auto=webp&s=4c2eb771e03e56f1df5f0072ef2e24a00ffcaae0",
+    "genero": "Aventura / RPG / Cozy / Mineração"
+  },
+  {
+    "id": "sourt-the-court",
+    "nome": "Sourt the Court",
+    "url": "https://en.gameslol.net/data//sort-the-court//index.html?gd_sdk_referrer_url=https://www.bubbleshooter.net/pt/jogos/sort-the-court/",
+    "imagem": "https://imgs.search.brave.com/cMYdrk7b-g88QrrRUCeCM6mFS93Bia5xbMbUTmYRkkU/rs:fit:860:0:0:0/g:ce/aHR0cHM6Ly9leHRl/cm5hbC1wcmV2aWV3/LnJlZGQuaXQvc29y/dC10aGUtY291cnQt/bG9va2luZy1mb3It/YS1mcmVlLWJyb3dz/ZXItZ2FtZS10aGF0/LXdvcmtzLXYwLTVt/Y09qVjVIQmNIUUh3/T0pkOFljZ3JrNmxr/bFR6dG50bFhDVFB1/UTNzTUUuanBnP2F1/dG89d2VicCZzPTgy/MDI1MmQwZGEyNDhm/NzFjYzMyMGEwOWJk/OGI4NGY1ZWFjY2Jj/NGY",
+    "genero": "Simulação / Estratégia"
   }
-}
+]
