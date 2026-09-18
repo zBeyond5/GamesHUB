@@ -161,6 +161,83 @@
     "url": "https://www.minijogos.com.br/embed/ludo-hero",
     "imagem": "https://www2.minijuegosgratis.com/v3/games/thumbnails/229028_7_sq.jpg",
     "genero": "Multiplayer / Tabuleiro"
+  },
+  {
+    "id": "tekken3",
+    "nome": "Tekken 3",
+    "url": "https://www.minijogos.com.br/embed/tekken-3",
+    "imagem": "https://www5.minijuegosgratis.com/v3/games/thumbnails/226199_7_sq.jpg",
+    "genero": "Luta / Ação"
+  },
+  {
+    "id": "crashbandicoot",
+    "nome": "Crash Bandicoot",
+    "url": "https://www.minijogos.com.br/embed/crash-bandicoot",
+    "imagem": "https://www2.minijuegosgratis.com/v3/games/thumbnails/9431_7_sq.jpg",
+    "genero": "Aventura / Ação"
+  },
+  {
+    "id": "hollowknight",
+    "nome": "Hollow Knight",
+    "url": "https://www.minijogos.com.br/embed/hollow-knight",
+    "imagem": "https://www3.minijuegosgratis.com/v3/games/thumbnails/254738_7_sq.jpg",
+    "genero": "Aventura / Ação"
+  },
+  {
+    "id": "stardew",
+    "nome": "Stardew Valley",
+    "url": "https://www.minijogos.com.br/embed/stardew-valley",
+    "imagem": "https://www1.minijuegosgratis.com/v3/games/thumbnails/258220_7_sq.jpg",
+    "genero": "Fazenda / Aventura"
+  },
+  {
+    "id": "garticphone",
+    "nome": "Gartic Phone Online",
+    "url": "https://www.minijogos.com.br/embed/gartic-phone",
+    "imagem": "https://www2.minijuegosgratis.com/v3/games/thumbnails/246167_7_sq.jpg",
+    "genero": "Multiplayer / Desenho"
+  },
+  {
+    "id": "garticio",
+    "nome": "Gartic.io Online",
+    "url": "https://www.minijogos.com.br/embed/gartic-io",
+    "imagem": "https://www3.minijuegosgratis.com/v3/games/thumbnails/221073_7_sq.jpg",
+    "genero": "Multiplayer / Desenho"
+  },
+  {
+    "id": "vicecity",
+    "nome": "GTA: Vice City",
+    "url": "https://www.minijogos.com.br/embed/gta-vice-city",
+    "imagem": "https://www5.minijuegosgratis.com/v3/games/thumbnails/258520_7_sq.jpg",
+    "genero": "Ação / FPS"
+  },https://www.minijogos.com.br/embed/super-mario-64
+  {
+    "id": "mario64",
+    "nome": "Super Mario 64",
+    "url": "https://www.minijogos.com.br/embed/super-mario-64",
+    "imagem": "https://www3.minijuegosgratis.com/v3/games/thumbnails/223331_7_sq.jpg",
+    "genero": "Ação / Aventura"
+  },
+  {
+    "id": "plantsvszombie",
+    "nome": "Plants vs Zombies",
+    "url": "https://www.minijogos.com.br/embed/plants-vs-zombies",
+    "imagem": "https://www4.minijuegosgratis.com/v3/games/thumbnails/24954_7_sq.jpg",
+    "genero": "Plataforma / Aventura"
+  },
+  {
+    "id": "tooncup21",
+    "nome": "Copa Cartoon 21",
+    "url": "https://www.minijogos.com.br/embed/toon-cup-2021",
+    "imagem": "https://www3.minijuegosgratis.com/v3/games/thumbnails/238932_7_sq.jpg",
+    "genero": "Ação / Futebol"
+  },
+  {
+    "id": "tooncup21",
+    "nome": "Copa Cartoon 21",
+    "url": "https://www.minijogos.com.br/embed/need-for-speed-underground",
+    "imagem": "https://www3.minijuegosgratis.com/v3/games/thumbnails/238932_7_sq.jpg",
+    "genero": "Ação / Futebol"
   }
  ]
 }
