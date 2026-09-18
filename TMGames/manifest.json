@@ -102,8 +102,8 @@
   {
     "id": "minecraft",
     "nome": "Minecraft",
-    "url": "https://mine-craft.io/",
-    "imagem": "https://www.google.com/s2/favicons?domain=mine-craft.io&sz=256",
+    "url": "https://www.minijogos.com.br/embed/bloxd-io",
+    "imagem": "https://imgs.search.brave.com/e4ZNfQ5CmWHkfjobe0Jo9PPOx2sIPYRhiJxz8u2LNfc/rs:fit:860:0:0:0/g:ce/aHR0cHM6Ly90aHVt/YnMuZHJlYW1zdGlt/ZS5jb20vYi9taW5l/Y3JhZnQtdmVjdG9y/LWxvZ28tbWluZWNy/YWZ0LWdhbWUtZC12/ZWN0b3ItbG9nby1p/bGx1c3RyYXRpb24t/aXNvbGF0ZWQtYmxh/Y2stdHJhbnNwYXJl/bnQtYmFubmVyLWJh/Y2tncm91bmQtY2Fu/LWJlLXVzZWQtMTY0/MDY4OTkyLmpwZw6",
     "genero": "Survival / Sandbox / Multiplayer"
   },
   {
@@ -140,6 +140,27 @@
     "url": "https://www.minijogos.com.br/embed/stopots",
     "imagem": "https://cdn.aptoide.com/imgs/8/c/1/8c15fb2e67d617ea5a3ff03c30b4e010_fgraphic.png",
     "genero": "Multiplayer / Estratégia"
+  },
+  {
+    "id": "Uno",
+    "nome": "Uno Online",
+    "url": "https://www.minijogos.com.br/embed/uno",
+    "imagem": "https://imgs.search.brave.com/ub-b3DshM7lmFQnO44isbVYyjl4e6WGSyZJOV_TWvVY/rs:fit:860:0:0:0/g:ce/aHR0cHM6Ly93YWxs/cGFwZXJzLmNvbS9p/bWFnZXMvaGQvdW5v/LWNhcmQtZ2FtZS1i/bHVlLXBvc3Rlci1v/bXZ5YWg2OG00Zmth/cnhsLmpwZw",
+    "genero": "Multiplayer / Cartas"
+  },
+  {
+    "id": "Rivals",
+    "nome": "Rivals Online",
+    "url": "https://www.minijogos.com.br/embed/roblox-rivals",
+    "imagem": "https://www2.minijuegosgratis.com/v3/games/thumbnails/256166_1.jpg",
+    "genero": "Multiplayer / FPS"
+  },
+  {
+    "id": "ludo",
+    "nome": "Ludo Online",
+    "url": "https://www.minijogos.com.br/embed/ludo-hero",
+    "imagem": "https://www2.minijuegosgratis.com/v3/games/thumbnails/229028_7_sq.jpg",
+    "genero": "Multiplayer / Tabuleiro"
   }
-]
+ ]
 }
