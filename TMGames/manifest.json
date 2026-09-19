@@ -238,6 +238,13 @@
     "url": "https://www.minijogos.com.br/embed/need-for-speed-underground",
     "imagem": "https://www3.minijuegosgratis.com/v3/games/thumbnails/238932_7_sq.jpg",
     "genero": "Ação / Futebol"
+  },
+  {
+    "id": "cuphead",
+    "nome": "Cuphead",
+    "url": "https://www.minijogos.com.br/jogo/cuphead",
+    "imagem": "https://www3.minijuegosgratis.com/v3/games/thumbnails/229208_7_sq.jpg",
+    "genero": "Ação / Aventura"
   }
  ]
 }
