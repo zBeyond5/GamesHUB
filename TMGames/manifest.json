@@ -9,6 +9,13 @@
       "genero": "Survival RPG / Ação / Multiplayer"
     },
     {
+      "id": "gtav",
+      "nome": "GTA V",
+      "url": "https://gta.deloskiyt.pl/",
+      "imagem": "https://imgs.search.brave.com/MxuRZGUo5r_ssxUJC83Wthx6xTXioojNs4_-mxSjhII/rs:fit:860:0:0:0/g:ce/aHR0cHM6Ly93YWxs/cGFwZXJjYXZlLmNv/bS93cC93cDc3NDMw/ODEuanBn",
+      "genero": "Ação / Mundo Aberto"
+    },
+    {
       "id": "geometrydash",
       "nome": "Geometry Dash",
       "url": "https://www.geometrydash.com/",
